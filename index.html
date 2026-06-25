@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>✨ A Special Quest for Manzura ✨</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    background: #0d0d1a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Press Start 2P', cursive;
+    overflow: hidden;
+}
+
+/* Starfield background */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: 
+        radial-gradient(ellipse at 20% 50%, rgba(120,40,200,0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(255,100,150,0.1) 0%, transparent 50%),
+        #0d0d1a;
+    z-index: -1;
+}
+
+#game-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+canvas {
+    display: block;
+    border-radius: 12px;
+    box-shadow: 0 0 40px rgba(255,100,150,0.4), 0 0 80px rgba(120,40,200,0.2);
+    image-rendering: pixelated;
+}
+
+/* HUD - inventory bar */
+#hud {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(0,0,0,0.75);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: white;
+    font-size: 9px;
+    z-index: 20;
+    min-width: 120px;
+}
+#hud .hud-title { color: #ffb3c6; margin-bottom: 6px; font-size: 8px; }
+#hud .hud-item { margin: 3px 0; color: #aaffaa; }
+#hud .hud-item.empty { color: #666; }
+
+/* Room label */
+#room-label {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.75);
+    border: 2px solid rgba(255,180,100,0.5);
+    border-radius: 8px;
+    padding: 6px 14px;
+    color: #ffdd99;
+    font-size: 9px;
+    z-index: 20;
+    white-space: nowrap;
+    transition: opacity 0.5s;
+}
+
+/* Controls hint */
+#controls-hint {
+    position: absolute;
+    bottom: 150px;
+    left: 12px;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: rgba(255,255,255,0.6);
+    font-size: 7px;
+    z-index: 20;
+    line-height: 1.8;
+}
+
+/* Dialogue box */
+#dialogue-box {
+    display: none;
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 740px;
+    min-height: 110px;
+    background: linear-gradient(135deg, rgba(10,10,30,0.97), rgba(20,10,40,0.97));
+    border: 3px solid;
+    border-image: linear-gradient(90deg, #ff4d6d, #c77dff, #ff4d6d) 1;
+    border-radius: 10px;
+    padding: 16px 20px 12px;
+    z-index: 30;
+    color: white;
+}
+
+#dialogue-speaker {
+    font-size: 9px;
+    color: #c77dff;
+    margin-bottom: 8px;
+}
+
+#dialogue-text {
+    font-size: 13px;
+    line-height: 1.7;
+    color: #fff;
+}
+
+#dialogue-hint {
+    font-size: 8px;
+    color: rgba(255,255,255,0.4);
+    text-align: right;
+    margin-top: 8px;
+    animation: blink 1.2s infinite;
+}
+
+/* Choice buttons */
+#choice-container {
+    display: none;
+    position: absolute;
+    bottom: 140px;
+    left: 50%;
+    transform: translateX(-50%);
+    gap: 24px;
+    z-index: 40;
+    flex-direction: row;
+}
+
+.choice-btn {
+    padding: 14px 28px;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 8px;
+    border: 3px solid white;
+    transition: all 0.15s;
+    position: relative;
+}
+
+#yes-btn {
+    background: linear-gradient(135deg, #ff4d6d, #c77dff);
+    color: white;
+    box-shadow: 0 0 20px rgba(255,77,109,0.5);
+}
+#yes-btn:hover { transform: scale(1.08); box-shadow: 0 0 30px rgba(255,77,109,0.8); }
+
+#no-btn {
+    background: rgba(30,30,50,0.9);
+    color: rgba(255,255,255,0.5);
+    border-color: rgba(255,255,255,0.3);
+}
+
+/* Ending / success screen */
+#ending-screen {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0);
+    z-index: 50;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    border-radius: 12px;
+    padding: 40px;
+    transition: background 1s;
+}
+
+#ending-screen.visible {
+    background: linear-gradient(135deg, rgba(255,77,109,0.92), rgba(180,50,200,0.92));
+}
+
+#ending-screen h1 {
+    font-size: 22px;
+    color: white;
+    text-shadow: 0 0 20px rgba(255,255,255,0.8);
+    margin-bottom: 20px;
+    line-height: 1.5;
+    opacity: 0;
+    transition: opacity 1s 0.5s;
+}
+#ending-screen p {
+    font-size: 11px;
+    color: rgba(255,255,255,0.85);
+    line-height: 2;
+    opacity: 0;
+    transition: opacity 1s 1.2s;
+}
+#ending-screen.visible h1,
+#ending-screen.visible p { opacity: 1; }
+
+/* Floating hearts overlay */
+#hearts-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 45;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes floatUp {
+    0% { transform: translateY(0) scale(1); opacity: 0.9; }
+    100% { transform: translateY(-800px) scale(0.3) rotate(20deg); opacity: 0; }
+}
+@keyframes petalFall {
+    0%   { transform: translateY(-10px) rotate(0deg); opacity: 0.8; }
+    100% { transform: translateY(820px) rotate(360deg); opacity: 0; }
+}
+</style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <canvas id="board" width="800" height="800"></canvas>
+
+    <div id="room-label">🌲 Forest Hub</div>
+
+    <div id="hud">
+        <div class="hud-title">🎒 Инвентарь</div>
+        <div class="hud-item empty" id="hud-honey">— пусто —</div>
+    </div>
+
+    <div id="controls-hint">
+        WASD / ↑↓←→ — ходить<br>
+        SPACE — говорить / дальше
+    </div>
+
+    <div id="dialogue-box">
+        <div id="dialogue-speaker">Frieren</div>
+        <div id="dialogue-text"></div>
+        <div id="dialogue-hint">▼ SPACE</div>
+    </div>
+
+    <div id="choice-container">
+        <button class="choice-btn" id="yes-btn">❤️ ДА!</button>
+        <button class="choice-btn" id="no-btn">🌟 Нет...</button>
+    </div>
+
+    <div id="ending-screen">
+        <h1 id="ending-title"></h1>
+        <p id="ending-body"></p>
+    </div>
+
+    <div id="hearts-overlay"></div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
