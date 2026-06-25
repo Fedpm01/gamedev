@@ -1,10 +1,10 @@
 // ============================================================
 // 戦争のフリーレン — A Quest for Manzura
-// Pixel RPG date invitation (upgraded)
+// Pixel RPG date invitation (upgraded: audio, collision, sizes, restart)
 // ============================================================
 
-// ---- ASSET PATHS — РЕДАКТИРУЙ ЗДЕСЬ, если имена файлов другие ----
-const ASSET_DIR = "assets/";
+// ---- ASSET PATHS — РЕДАКТИРУЙ ЗДЕСЬ, если имена/папка другие ----
+const ASSET_DIR = "assets/";   // если картинки лежат рядом с index.html (без папки), поставь ""
 const FILES = {
     player:    "fern.png",
     npc:       "frieren.png",
@@ -13,7 +13,6 @@ const FILES = {
     rival:     "rival.png",
     heartRune: "rune_heart.png",
     starRune:  "rune_star.png",
-    // карты (имена совпадают с твоими загруженными файлами)
     map_forest_hub: "pixel_forest.png",
     map_picnic:     "pixel_picnic.png",
     map_dancehall:  "map_dancehall.png",
@@ -39,12 +38,17 @@ const wrapper         = document.getElementById("game-wrapper");
 const titleScreen     = document.getElementById("title-screen");
 const titleVideo      = document.getElementById("title-video");
 const gameoverScreen  = document.getElementById("gameover-screen");
+const bgMusic         = document.getElementById("bg-music");
+const volEl           = document.getElementById("vol");
+const muteBtn         = document.getElementById("mute-btn");
 
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // ---- LOAD IMAGE HELPER ----
+let assetErrors = [];
 function img(file) {
     const i = new Image();
+    i.onerror = () => { if (!assetErrors.includes(file)) assetErrors.push(file); console.warn("⚠ Не загрузилось:", i.src); };
     i.src = ASSET_DIR + file;
     return i;
 }
@@ -72,38 +76,38 @@ const MAPS = {
 
 // ---- GAME STATE ----
 const G = {
-    started: false,
-    room: "forest_hub",
-    inventory: [],
-    talking: false,
-    dialogueIndex: 0,
-    currentLines: [],
-    onDialogueEnd: null,
-    choiceActive: false,
-    lockMove: false,
-    bearSolved: false,
-    orbCollected: false,
-    visited: {},
-    curSpeaker: "",
+    started: false, room: "forest_hub", inventory: [], talking: false,
+    dialogueIndex: 0, currentLines: [], onDialogueEnd: null, choiceActive: false,
+    lockMove: false, bearSolved: false, orbCollected: false, visited: {}, curSpeaker: "",
 };
+
+let debug = false;   // нажми C в игре, чтобы видеть блоки-препятствия
 
 // ---- INPUT ----
 const keys = {};
 document.addEventListener("keydown", e => { keys[e.code] = true; });
 document.addEventListener("keyup",   e => { keys[e.code] = false; });
 
-// ---- PLAYER ----
+// ---- PLAYER (Ферн) — размер как есть ----
 const player = { x: 380, y: 520, w: 40, h: 50, speed: 260 };
 
-// ---- RIVAL STATE ----
-const rival = { x: 200, y: 300, w: 40, h: 50, dir: 1, speed: 110, minX: 120, maxX: 620 };
+// ---- RIVAL (чуть меньше) ----
+const rival = { x: 200, y: 300, w: 48, h: 58, dir: 1, speed: 110, minX: 120, maxX: 620 };
 
-// ---- ROOMS CONFIG ----
+// ============================================================
+// ROOMS — npc/item размеры + blocks (препятствия) + onEnter
+//   blocks: прямоугольники, куда нельзя зайти. Жми C, чтобы их видеть и подгонять.
+// ============================================================
 const ROOMS = {
 
     forest_hub: {
-        npc: { x: 380, y: 240 },
-        item: { type: "honey", x: 610, y: 520, w: 36, h: 36, active: true },
+        npc: { x: 380, y: 240 },                                   // Фрирен — размер как есть
+        item: { type: "honey", x: 610, y: 520, w: 48, h: 48, active: true },
+        blocks: [
+            { x: 330, y: 115, w: 165, h: 115 },   // вход в пещеру
+            { x: 165, y: 285, w: 95,  h: 70  },   // валун слева
+            { x: 560, y: 585, w: 130, h: 95  },   // камни справа-внизу
+        ],
         exits: [
             { x: 0,   y: 340, w: 50, h: 120, to: "picnic",    label: "← Пикник" },
             { x: 750, y: 340, w: 50, h: 120, to: "dancehall", label: "→ Танцевальный зал" },
@@ -120,8 +124,15 @@ const ROOMS = {
     },
 
     picnic: {
-        bear: { x: 360, y: 310, w: 72, h: 72 },
-        clue: { x: 360, y: 290, w: 80, h: 50, active: false, text: "🌸 Подсказка 1: «Место, где пахнет цветами и смеётся ветер...»" },
+        bear: { x: 360, y: 320, w: 84, h: 84 },
+        clue: { x: 360, y: 300, w: 80, h: 50, active: false, text: "🌸 Подсказка 1: «Место, где пахнет цветами и смеётся ветер...»" },
+        blocks: [
+            { x: 0,   y: 0,   w: 800, h: 115 },   // деревья сверху
+            { x: 0,   y: 115, w: 120, h: 560 },   // деревья слева
+            { x: 680, y: 115, w: 120, h: 560 },   // деревья справа
+            { x: 0,   y: 600, w: 300, h: 200 },   // деревья снизу-слева
+            { x: 500, y: 600, w: 300, h: 200 },   // деревья снизу-справа (оставлен проход к выходу)
+        ],
         exits: [
             { x: 340, y: 750, w: 120, h: 50, to: "forest_hub", label: "↓ Назад" },
         ],
@@ -137,10 +148,12 @@ const ROOMS = {
     },
 
     dancehall: {
-        clue: { x: 370, y: 200, w: 60, h: 60, active: true, text: "✨ Подсказка 2: «Там, где музыка — это тайный язык двоих...»" },
+        // ходить можно только по залу (паркет + камень снизу), НЕ по небу/балюстраде
+        walk: [ { x: 120, y: 270, w: 560, h: 510 } ],
+        clue: { x: 370, y: 360, w: 60, h: 60, active: true, text: "✨ Подсказка 2: «Там, где музыка — это тайный язык двоих...»" },
         exits: [
             { x: 340, y: 750, w: 120, h: 50, to: "forest_hub",  label: "↓ Назад" },
-            { x: 340, y: 0,   w: 120, h: 50, to: "rival_lair",  label: "↑ Дальше" },
+            { x: 340, y: 262, w: 120, h: 30, to: "rival_lair",  label: "↑ Дальше" },
         ],
         onEnter(first) {
             if (!first) return;
@@ -154,6 +167,11 @@ const ROOMS = {
     },
 
     rival_lair: {
+        blocks: [
+            { x: 330, y: 120, w: 160, h: 80  },   // руина сверху
+            { x: 230, y: 190, w: 70,  h: 130 },   // колонна слева
+            { x: 500, y: 190, w: 70,  h: 130 },   // колонна справа
+        ],
         exits: [
             { x: 750, y: 340, w: 50, h: 120, to: "waterfall", label: "→ К водопаду" },
             { x: 340, y: 750, w: 120, h: 50, to: "dancehall", label: "↓ Назад" },
@@ -169,7 +187,13 @@ const ROOMS = {
     },
 
     waterfall: {
-        orb: { x: 370, y: 280, w: 50, h: 50, active: true },
+        orb: { x: 370, y: 470, w: 50, h: 50, active: true },
+        // ходить можно только по камню/тропе/левой полянке — НЕ по воде
+        walk: [
+            { x: 195, y: 380, w: 385, h: 235 },   // центральная каменная площадка
+            { x: 300, y: 560, w: 200, h: 240 },   // тропа вниз к выходу
+            { x: 20,  y: 300, w: 215, h: 170 },   // левая полянка (стол) -> выход к Оракулу
+        ],
         exits: [
             { x: 0,   y: 340, w: 50, h: 120, to: "oracle",     label: "← К Оракулу" },
             { x: 340, y: 750, w: 120, h: 50, to: "rival_lair", label: "↓ Назад" },
@@ -187,8 +211,13 @@ const ROOMS = {
     oracle: {
         npc: { x: 360, y: 230 },
         runes: [
-            { type: "accept",  x: 220, y: 400, w: 100, h: 100 },
-            { type: "decline", x: 480, y: 400, w: 100, h: 100 },
+            { type: "accept",  x: 220, y: 400, w: 84, h: 84 },
+            { type: "decline", x: 480, y: 400, w: 84, h: 84 },
+        ],
+        blocks: [
+            { x: 355, y: 355, w: 90,  h: 110 },   // пьедестал с шаром (центр)
+            { x: 120, y: 230, w: 70,  h: 200 },   // колонна слева
+            { x: 610, y: 230, w: 70,  h: 200 },   // колонна справа
         ],
         exits: [],
         onEnter() {
@@ -202,7 +231,6 @@ const ROOMS = {
     },
 };
 
-// ---- ROOM LABELS MAP ----
 const ROOM_LABELS = {
     forest_hub: "🌲 Forest Hub",
     picnic:     "🌸 Romantic Picnic Grove",
@@ -213,7 +241,90 @@ const ROOM_LABELS = {
 };
 
 // ============================================================
-// DIALOGUE SYSTEM (with typewriter)
+// AUDIO (музыка-файл + процедурные звуки + громкость)
+// ============================================================
+let actx = null, master = null, muted = false;
+
+function curVol() { return muted ? 0 : (parseInt(volEl.value, 10) / 100); }
+
+function initAudio() {
+    if (actx) return;
+    try {
+        actx = new (window.AudioContext || window.webkitAudioContext)();
+        master = actx.createGain();
+        master.gain.value = curVol();
+        master.connect(actx.destination);
+    } catch (e) { /* без Web Audio просто не будет звуков */ }
+}
+
+function beep(freq, dur, type, when, gain) {
+    if (!actx || !master) return;
+    try {
+        const o = actx.createOscillator(), g = actx.createGain();
+        o.type = type || "square";
+        o.frequency.value = freq;
+        const t = actx.currentTime + (when || 0);
+        o.connect(g); g.connect(master);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(gain || 0.18, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + (dur || 0.1));
+        o.start(t); o.stop(t + (dur || 0.1) + 0.03);
+    } catch (e) {}
+}
+function sfxBlip()   { beep(520, 0.05, "square", 0, 0.08); }
+function sfxPickup() { beep(660, 0.08, "square", 0, 0.18); beep(990, 0.10, "square", 0.07, 0.16); }
+function sfxWin()    { [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.20, "triangle", i * 0.12, 0.22)); }
+
+function applyVolume() {
+    if (bgMusic) bgMusic.volume = curVol();
+    if (master) master.gain.value = curVol();
+}
+// какая музыка в какой комнате (имена = ТВОИ файлы в assets/)
+const MUSIC = {
+    default:    "Evan Call - The Magic Within.mp3",   // спокойная — почти везде
+    rival_lair: "Evan Call - Dragon Smasher.mp3",     // напряжённая — у соперницы
+    // хочешь — назначь свои, напр.: oracle: "Vollzanbel.mp3", dancehall: "Judradjim.mp3"
+    // (если хочешь Dragon Smasher главной темой — поставь её в default)
+};
+let currentTrack = null;
+function playRoomMusic(room) {
+    if (!bgMusic) return;
+    const track = MUSIC[room] || MUSIC.default;
+    if (track === currentTrack) return;          // та же музыка — не перезапускаем
+    currentTrack = track;
+    bgMusic.src = ASSET_DIR + encodeURIComponent(track);
+    bgMusic.volume = curVol();
+    bgMusic.play().catch(() => {/* нет файла — не страшно */});
+}
+volEl.addEventListener("input", applyVolume);
+muteBtn.addEventListener("click", () => {
+    muted = !muted;
+    muteBtn.textContent = muted ? "🔇" : "🔊";
+    if (bgMusic) bgMusic.muted = muted;
+    applyVolume();
+});
+
+// запустить музыку как можно раньше — уже на титульном экране
+function ensureMusic() {
+    if (!bgMusic) return;
+    if (!bgMusic.src) { currentTrack = MUSIC.default; bgMusic.src = ASSET_DIR + encodeURIComponent(MUSIC.default); }
+    bgMusic.volume = curVol();
+    bgMusic.play().catch(() => {/* браузер ждёт первого касания/клика */});
+}
+// первое действие пользователя (даже движок ползунка громкости) запускает музыку
+function firstInteract() {
+    ensureMusic();
+    window.removeEventListener("pointerdown", firstInteract);
+    window.removeEventListener("keydown", firstInteract);
+    window.removeEventListener("touchstart", firstInteract);
+}
+window.addEventListener("pointerdown", firstInteract);
+window.addEventListener("keydown", firstInteract);
+window.addEventListener("touchstart", firstInteract);
+ensureMusic();   // попытка автозапуска (если браузер разрешит)
+
+// ============================================================
+// DIALOGUE SYSTEM (typewriter)
 // ============================================================
 let typeTimer = null, typing = false, fullLine = "";
 
@@ -222,6 +333,7 @@ function showLine(text) {
     if (G.curSpeaker && t.startsWith(G.curSpeaker + ":")) t = t.slice(G.curSpeaker.length + 1).trim();
     fullLine = t;
     clearInterval(typeTimer);
+    sfxBlip();
     if (reduceMotion) { dialogueText.textContent = t; typing = false; return; }
     dialogueText.textContent = "";
     typing = true;
@@ -233,13 +345,8 @@ function showLine(text) {
 }
 
 function talk(speaker, lines, onEnd) {
-    G.talking = true;
-    G.lockMove = true;
-    G.dialogueIndex = 0;
-    G.currentLines = lines;
-    G.onDialogueEnd = onEnd || null;
-    G.curSpeaker = speaker;
-
+    G.talking = true; G.lockMove = true; G.dialogueIndex = 0;
+    G.currentLines = lines; G.onDialogueEnd = onEnd || null; G.curSpeaker = speaker;
     dialogueSpeaker.textContent = speaker;
     dialogueBox.style.display = "block";
     showLine(lines[0]);
@@ -247,24 +354,13 @@ function talk(speaker, lines, onEnd) {
 
 function advanceDialogue() {
     if (!G.talking) return;
-
-    // First press finishes the current line instantly
     if (typing) { clearInterval(typeTimer); dialogueText.textContent = fullLine; typing = false; return; }
-
     G.dialogueIndex++;
-
     if (G.dialogueIndex >= G.currentLines.length) {
-        G.talking = false;
-        dialogueBox.style.display = "none";
-        G.lockMove = false;
-        if (G.onDialogueEnd) {
-            const cb = G.onDialogueEnd;
-            G.onDialogueEnd = null;
-            cb();
-        }
+        G.talking = false; dialogueBox.style.display = "none"; G.lockMove = false;
+        if (G.onDialogueEnd) { const cb = G.onDialogueEnd; G.onDialogueEnd = null; cb(); }
         return;
     }
-
     showLine(G.currentLines[G.dialogueIndex]);
 }
 
@@ -272,16 +368,13 @@ function advanceDialogue() {
 // ENDING
 // ============================================================
 function triggerEnding(type) {
-    G.lockMove = true;
-    G.choiceActive = false;
-
+    G.lockMove = true; G.choiceActive = false;
     heartsOverlay.style.display = "block";
     spawnHearts();
-
+    sfxWin();
     setTimeout(() => {
         endingScreen.style.display = "flex";
         requestAnimationFrame(() => endingScreen.classList.add("visible"));
-
         document.getElementById("ending-title").textContent = "❤️ Манзура, ты согласилась!";
         document.getElementById("ending-body").textContent =
             "Ты прошла все испытания и нашла все подсказки.\n\n" +
@@ -309,90 +402,94 @@ function spawnHearts() {
     }
 }
 
+document.getElementById("restart-btn").addEventListener("click", () => location.reload());
+
 // ============================================================
-// GAME OVER (caught by rival)
+// GAME OVER (поймала соперница)
 // ============================================================
 function showGameOver() {
-    G.lockMove = true;
-    G.talking = false;
+    G.lockMove = true; G.talking = false;
     dialogueBox.style.display = "none";
     gameoverScreen.style.display = "flex";
 }
-
 function retryRival() {
     gameoverScreen.style.display = "none";
     rival.x = 200; rival.y = 300; rival.dir = 1;
     player.x = 380; player.y = 600;
     G.lockMove = false;
 }
-
 document.getElementById("retry-btn").addEventListener("click", retryRival);
 
 // ============================================================
 // LOAD ROOM
 // ============================================================
 function loadRoom(name) {
-    G.room = name;
-    G.choiceActive = false;
-    G.lockMove = false;
-    G.talking = false;
+    G.room = name; G.choiceActive = false; G.lockMove = false; G.talking = false;
     dialogueBox.style.display = "none";
-
-    player.x = 380;
-    player.y = 520;
-
+    player.x = 380; player.y = 520;
     roomLabel.textContent = ROOM_LABELS[name] || name;
-
     const room = ROOMS[name];
     const first = !G.visited[name];
     G.visited[name] = true;
     if (room && room.onEnter) room.onEnter(first);
+    playRoomMusic(name);
 }
 
 // ============================================================
 // COLLISION
 // ============================================================
 function hit(a, b) {
-    return a.x < b.x + b.w &&
-           a.x + a.w > b.x &&
-           a.y < b.y + b.h &&
-           a.y + a.h > b.y;
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+// маленький "хитбокс ног" внизу спрайта — так упирание в стены ощущается естественно
+function feetBox(x, y) { return { x: x + 8, y: y + player.h - 16, w: player.w - 16, h: 14 }; }
+function rectInside(a, b) {   // a полностью внутри b
+    return a.x >= b.x && a.x + a.w <= b.x + b.w && a.y >= b.y && a.y + a.h <= b.y + b.h;
+}
+function canStand(x, y) {
+    const f = feetBox(x, y);
+    const room = ROOMS[G.room];
+    // в выход зайти можно всегда (даже если за ним вода/небо)
+    for (const ex of room.exits || []) { if (hit(f, ex)) return true; }
+    // walk = белый список: если задан, ноги ДОЛЖНЫ быть внутри одной из зон
+    if (room.walk) {
+        let ok = false;
+        for (const w of room.walk) { if (rectInside(f, w)) { ok = true; break; } }
+        if (!ok) return false;
+    }
+    // blocks = чёрный список препятствий
+    for (const b of room.blocks || []) { if (hit(f, b)) return false; }
+    return true;
 }
 
 // ============================================================
-// ACTION (SPACE / touch button) — interaction
+// ACTION (SPACE / клик) — взаимодействие
 // ============================================================
 function pressAction() {
     if (!G.started) { startGame(); return; }
-
     if (G.talking) { advanceDialogue(); return; }
 
     const room = ROOMS[G.room];
 
-    // HONEY PICKUP
     if (G.room === "forest_hub") {
         const item = room.item;
         if (item && item.active && hit(player, item)) {
-            item.active = false;
-            G.inventory.push("honey");
-            hudHoney.textContent = "🍯 Мёд";
-            hudHoney.className = "hud-item";
+            item.active = false; G.inventory.push("honey");
+            hudHoney.textContent = "🍯 Мёд"; hudHoney.className = "hud-item";
+            sfxPickup();
             talk("Frieren", ["Frieren: Ого, подобрала! Мёд пригодится — мишка явно не откажется."]);
             return;
         }
     }
 
-    // BEAR INTERACTION
     if (G.room === "picnic" && room.bear && !G.bearSolved) {
         const b = room.bear;
         if (hit(player, { x: b.x, y: b.y, w: b.w, h: b.h })) {
             if (G.inventory.includes("honey")) {
-                G.bearSolved = true;
-                room.bear = null;
-                room.clue.active = true;
+                G.bearSolved = true; room.bear = null; room.clue.active = true;
                 G.inventory = G.inventory.filter(i => i !== "honey");
-                hudHoney.textContent = "— пусто —";
-                hudHoney.className = "hud-item empty";
+                hudHoney.textContent = "— пусто —"; hudHoney.className = "hud-item empty";
+                sfxPickup();
                 talk("Frieren", [
                     "Frieren: Ты дала ему мёд!",
                     "Frieren: *довольное медвежье урчание*",
@@ -408,56 +505,44 @@ function pressAction() {
         }
     }
 
-    // CLUE PICKUP — PICNIC
-    if (G.room === "picnic" && room.clue && room.clue.active) {
-        if (hit(player, room.clue)) {
-            room.clue.active = false;
-            talk("Frieren", [
-                "Frieren: " + room.clue.text,
-                "Frieren: Красивая подсказка, правда? 😏",
-                "Frieren: Возвращайся в Forest Hub, там ещё кое-что ждёт.",
-            ]);
-            return;
-        }
+    if (G.room === "picnic" && room.clue && room.clue.active && hit(player, room.clue)) {
+        room.clue.active = false; sfxPickup();
+        talk("Frieren", [
+            "Frieren: " + room.clue.text,
+            "Frieren: Красивая подсказка, правда? 😏",
+            "Frieren: Возвращайся в Forest Hub, там ещё кое-что ждёт.",
+        ]);
+        return;
     }
 
-    // CLUE PICKUP — DANCEHALL
-    if (G.room === "dancehall" && room.clue && room.clue.active) {
-        if (hit(player, room.clue)) {
-            room.clue.active = false;
-            talk("Frieren", [
-                "Frieren: " + room.clue.text,
-                "Frieren: Именно! Теперь иди дальше — к водопаду через логово соперницы.",
-            ]);
-            return;
-        }
+    if (G.room === "dancehall" && room.clue && room.clue.active && hit(player, room.clue)) {
+        room.clue.active = false; sfxPickup();
+        talk("Frieren", [
+            "Frieren: " + room.clue.text,
+            "Frieren: Именно! Теперь иди дальше — к водопаду через логово соперницы.",
+        ]);
+        return;
     }
 
-    // ORB PICKUP — WATERFALL
-    if (G.room === "waterfall" && room.orb && room.orb.active) {
-        if (hit(player, room.orb)) {
-            room.orb.active = false;
-            G.orbCollected = true;
-            talk("Frieren", [
-                "Frieren: ✨ Orb of Truth подобран!",
-                "Frieren: Последняя подсказка: «Там, где время замирает — и ты улыбаешься».",
-                "Frieren: Теперь ступай в Оракул — налево ←",
-            ]);
-            return;
-        }
+    if (G.room === "waterfall" && room.orb && room.orb.active && hit(player, room.orb)) {
+        room.orb.active = false; G.orbCollected = true; sfxPickup();
+        talk("Frieren", [
+            "Frieren: ✨ Orb of Truth подобран!",
+            "Frieren: Последняя подсказка: «Там, где время замирает — и ты улыбаешься».",
+            "Frieren: Теперь ступай в Оракул — налево ←",
+        ]);
+        return;
     }
 
-    // NPC in oracle — re-trigger proposal if needed
     if (G.room === "oracle" && !G.choiceActive) {
         const npc = room.npc;
-        if (npc && hit(player, { x: npc.x, y: npc.y, w: 40, h: 50 })) {
-            room.onEnter();
-        }
+        if (npc && hit(player, { x: npc.x, y: npc.y, w: 40, h: 50 })) room.onEnter();
     }
 }
 
 document.addEventListener("keydown", e => {
     if (e.code === "Space") { e.preventDefault(); pressAction(); }
+    if (e.code === "KeyC")  { debug = !debug; }
 });
 
 // ============================================================
@@ -468,6 +553,7 @@ function startGame() {
     G.started = true;
     titleScreen.style.display = "none";
     try { if (titleVideo) titleVideo.pause(); } catch (e) {}
+    initAudio();
     loadRoom("forest_hub");
 }
 document.getElementById("title-start").addEventListener("click", startGame);
@@ -488,52 +574,38 @@ function update(dt) {
     if (keys["KeyD"] || keys["ArrowRight"]) dx++;
     if (dx && dy) { dx *= Math.SQRT1_2; dy *= Math.SQRT1_2; }
 
-    player.x += dx * player.speed * dt;
-    player.y += dy * player.speed * dt;
-    player.x = Math.max(0, Math.min(760, player.x));
-    player.y = Math.max(0, Math.min(750, player.y));
+    // движение по осям отдельно + проверка препятствий (скольжение вдоль стен)
+    let nx = Math.max(0, Math.min(760, player.x + dx * player.speed * dt));
+    let ny = Math.max(0, Math.min(750, player.y + dy * player.speed * dt));
+    if (canStand(nx, player.y)) player.x = nx;
+    if (canStand(player.x, ny)) player.y = ny;
 
     const room = ROOMS[G.room];
 
-    // EXIT CHECK
+    // выходы
     for (const ex of room.exits || []) {
-        if (hit(player, ex)) {
-            loadRoom(ex.to);
-            return;
-        }
+        if (hit(player, ex)) { loadRoom(ex.to); return; }
     }
 
-    // RIVAL PATROL
+    // патруль соперницы
     if (G.room === "rival_lair") {
         rival.x += rival.dir * rival.speed * dt;
         if (rival.x < rival.minX) { rival.x = rival.minX; rival.dir = 1; }
         if (rival.x > rival.maxX) { rival.x = rival.maxX; rival.dir = -1; }
-
-        if (rivalSpots()) {
-            showGameOver();
-            return;
-        }
+        if (rivalSpots()) { showGameOver(); return; }
     }
 
-    // ORACLE RUNES
+    // руны оракула
     if (G.room === "oracle" && G.choiceActive) {
         const heart = room.runes.find(r => r.type === "accept");
         const star  = room.runes.find(r => r.type === "decline");
-
-        if (heart && hit(player, heart)) {
-            triggerEnding("yes");
-            return;
-        }
-        // The "star / no" rune playfully runs away when you get close
+        if (heart && hit(player, heart)) { triggerEnding("yes"); return; }
         if (star) {
             const d = Math.hypot(
                 (player.x + player.w / 2) - (star.x + star.w / 2),
                 (player.y + player.h / 2) - (star.y + star.h / 2)
             );
-            if (d < 120) {
-                star.x = 90 + Math.random() * 520;
-                star.y = 300 + Math.random() * 270;
-            }
+            if (d < 120) { star.x = 90 + Math.random() * 520; star.y = 300 + Math.random() * 270; }
         }
     }
 }
@@ -550,59 +622,47 @@ function rivalSpots() {
 // ============================================================
 // DRAW
 // ============================================================
+function drawImg(im, x, y, w, h) {
+    if (im && im.complete && im.naturalWidth) ctx.drawImage(im, x, y, w, h);
+}
+
 function draw() {
-    // Map background (guard against not-yet-loaded images)
     const map = MAPS[G.room];
-    if (map && map.complete && map.naturalWidth) {
-        ctx.drawImage(map, 0, 0, 800, 800);
-    } else {
-        ctx.fillStyle = "#16121f";
-        ctx.fillRect(0, 0, 800, 800);
-    }
+    if (map && map.complete && map.naturalWidth) ctx.drawImage(map, 0, 0, 800, 800);
+    else { ctx.fillStyle = "#16121f"; ctx.fillRect(0, 0, 800, 800); }
 
     const room = ROOMS[G.room];
 
-    // Honey item (forest_hub)
+    // мёд (forest_hub)
     if (G.room === "forest_hub" && room.item && room.item.active) {
         const bob = Math.sin(Date.now() * 0.003) * 4;
-        ctx.drawImage(SPR.honey, room.item.x, room.item.y + bob, 36, 36);
-        ctx.fillStyle = "rgba(255,220,50,0.7)";
-        ctx.font = "10px 'Press Start 2P'";
-        ctx.textAlign = "center";
-        ctx.fillText("SPACE", room.item.x + 18, room.item.y - 6);
+        drawImg(SPR.honey, room.item.x, room.item.y + bob, room.item.w, room.item.h);
+        ctx.fillStyle = "rgba(255,220,50,0.7)"; ctx.font = "10px 'Press Start 2P'"; ctx.textAlign = "center";
+        ctx.fillText("SPACE", room.item.x + room.item.w / 2, room.item.y - 6);
     }
 
-    // Bear (picnic)
+    // медведь (picnic)
     if (G.room === "picnic" && room.bear) {
-        ctx.drawImage(SPR.bear, room.bear.x, room.bear.y, room.bear.w, room.bear.h);
+        drawImg(SPR.bear, room.bear.x, room.bear.y, room.bear.w, room.bear.h);
         if (!G.inventory.includes("honey")) {
-            ctx.fillStyle = "rgba(255,80,80,0.9)";
-            ctx.font = "9px 'Press Start 2P'";
-            ctx.textAlign = "center";
-            ctx.fillText("🍯?", room.bear.x + 36, room.bear.y - 8);
+            ctx.fillStyle = "rgba(255,80,80,0.9)"; ctx.font = "9px 'Press Start 2P'"; ctx.textAlign = "center";
+            ctx.fillText("🍯?", room.bear.x + room.bear.w / 2, room.bear.y - 8);
         }
     }
 
-    // Clue glow (picnic & dancehall)
+    // свечение подсказки (picnic & dancehall)
     if ((G.room === "picnic" || G.room === "dancehall") && room.clue && room.clue.active) {
         const glow = 0.4 + Math.sin(Date.now() * 0.005) * 0.3;
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = `rgba(255,180,255,${glow})`;
-        ctx.fillStyle = `rgba(255,180,255,${glow})`;
-        ctx.beginPath();
-        ctx.arc(room.clue.x + 30, room.clue.y + 20, 16, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "white";
-        ctx.font = "18px serif";
-        ctx.textAlign = "center";
-        ctx.fillText("📜", room.clue.x + 30, room.clue.y + 26);
+        const cx = room.clue.x + room.clue.w / 2, cy = room.clue.y + room.clue.h / 2;
+        ctx.shadowBlur = 26; ctx.shadowColor = `rgba(255,180,255,${glow})`; ctx.fillStyle = `rgba(255,180,255,${glow})`;
+        ctx.beginPath(); ctx.arc(cx, cy, 24, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0; ctx.fillStyle = "white"; ctx.font = "30px serif"; ctx.textAlign = "center";
+        ctx.fillText("📜", cx, cy + 10);
     }
 
-    // Rival (rival_lair)
+    // соперница (rival_lair)
     if (G.room === "rival_lair") {
-        ctx.fillStyle = "rgba(255,40,40,0.22)";
-        ctx.beginPath();
+        ctx.fillStyle = "rgba(255,40,40,0.22)"; ctx.beginPath();
         if (rival.dir === 1) {
             ctx.moveTo(rival.x + rival.w, rival.y + 25);
             ctx.lineTo(rival.x + rival.w + 220, rival.y - 110);
@@ -612,74 +672,79 @@ function draw() {
             ctx.lineTo(rival.x - 220, rival.y - 110);
             ctx.lineTo(rival.x - 220, rival.y + 110 + 25);
         }
-        ctx.closePath();
-        ctx.fill();
-        ctx.drawImage(SPR.rival, rival.x, rival.y, rival.w, rival.h);
+        ctx.closePath(); ctx.fill();
+        drawImg(SPR.rival, rival.x, rival.y, rival.w, rival.h);
     }
 
-    // Orb (waterfall)
+    // орб (waterfall)
     if (G.room === "waterfall" && room.orb && room.orb.active) {
-        const t = Date.now() * 0.004;
-        const pulse = Math.sin(t) * 8;
-        ctx.shadowBlur = 30;
-        ctx.shadowColor = "rgba(100,220,255,0.8)";
-        ctx.fillStyle = "rgba(100,220,255,0.9)";
-        ctx.beginPath();
-        ctx.arc(room.orb.x + 25, room.orb.y + 25 + Math.sin(t) * 5, 18 + pulse * 0.3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "white";
-        ctx.font = "20px serif";
-        ctx.textAlign = "center";
-        ctx.fillText("🔮", room.orb.x + 25, room.orb.y + 32);
+        const t = Date.now() * 0.004, pulse = Math.sin(t) * 8;
+        ctx.shadowBlur = 30; ctx.shadowColor = "rgba(100,220,255,0.8)"; ctx.fillStyle = "rgba(100,220,255,0.9)";
+        ctx.beginPath(); ctx.arc(room.orb.x + room.orb.w / 2, room.orb.y + room.orb.h / 2 + Math.sin(t) * 5, 16 + pulse * 0.3, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0; ctx.fillStyle = "white"; ctx.font = "18px serif"; ctx.textAlign = "center";
+        ctx.fillText("🔮", room.orb.x + room.orb.w / 2, room.orb.y + room.orb.h / 2 + 6);
     }
 
-    // NPC — forest_hub and oracle
+    // NPC (Фрирен) — forest_hub и oracle
     if (room.npc) {
-        ctx.drawImage(SPR.npc, room.npc.x, room.npc.y, 40, 50);
+        drawImg(SPR.npc, room.npc.x, room.npc.y, 40, 50);
         const dist = Math.hypot(player.x - room.npc.x, player.y - room.npc.y);
         if (dist < 80 && !G.talking) {
             const bounce = Math.sin(Date.now() * 0.006) * 3;
-            ctx.fillStyle = "#ffdd00";
-            ctx.font = "bold 18px 'Press Start 2P'";
-            ctx.textAlign = "center";
+            ctx.fillStyle = "#ffdd00"; ctx.font = "bold 18px 'Press Start 2P'"; ctx.textAlign = "center";
             ctx.fillText("!", room.npc.x + 20, room.npc.y - 12 + bounce);
         }
     }
 
-    // Oracle runes
+    // руны оракула
     if (G.room === "oracle" && G.choiceActive) {
         for (const rune of room.runes) {
             const pulse = Math.sin(Date.now() * 0.004) * 8;
             const runeImg = rune.type === "accept" ? SPR.heartRune : SPR.starRune;
-            ctx.drawImage(runeImg, rune.x - pulse * 0.5, rune.y - pulse * 0.5, rune.w + pulse, rune.h + pulse);
+            drawImg(runeImg, rune.x - pulse * 0.5, rune.y - pulse * 0.5, rune.w + pulse, rune.h + pulse);
             ctx.fillStyle = rune.type === "accept" ? "#ffb3c6" : "#99c2ff";
-            ctx.font = "8px 'Press Start 2P'";
-            ctx.textAlign = "center";
-            ctx.fillText(rune.type === "accept" ? "❤️ ДА" : "🌟 НЕТ", rune.x + 50, rune.y + 116);
+            ctx.font = "8px 'Press Start 2P'"; ctx.textAlign = "center";
+            ctx.fillText(rune.type === "accept" ? "❤️ ДА" : "🌟 НЕТ", rune.x + rune.w / 2, rune.y + rune.h + 14);
         }
     }
 
-    // Player
-    ctx.drawImage(SPR.player, player.x, player.y, player.w, player.h);
+    // игрок (Ферн)
+    drawImg(SPR.player, player.x, player.y, player.w, player.h);
 
-    // Exit arrows
+    // стрелки выходов
     for (const ex of (room.exits || [])) {
-        const dist = Math.hypot(
-            player.x + 20 - (ex.x + ex.w / 2),
-            player.y + 25 - (ex.y + ex.h / 2)
-        );
-        if (dist < 160) {
-            ctx.fillStyle = "rgba(255,255,255,0.65)";
-            ctx.font = "7px 'Press Start 2P'";
-            ctx.textAlign = "center";
+        const d = Math.hypot(player.x + 20 - (ex.x + ex.w / 2), player.y + 25 - (ex.y + ex.h / 2));
+        if (d < 160) {
+            ctx.fillStyle = "rgba(255,255,255,0.65)"; ctx.font = "7px 'Press Start 2P'"; ctx.textAlign = "center";
             ctx.fillText(ex.label || "→", ex.x + ex.w / 2, ex.y + ex.h / 2);
         }
+    }
+
+    // DEBUG: показать блоки-препятствия (клавиша C)
+    if (debug) {
+        ctx.lineWidth = 2;
+        // walk-зоны (зелёные) — где ХОДИТЬ можно
+        if (room.walk) { ctx.strokeStyle = "rgba(60,255,120,0.9)"; for (const w of room.walk) ctx.strokeRect(w.x, w.y, w.w, w.h); }
+        // blocks (красные) — куда НЕЛЬЗЯ
+        ctx.strokeStyle = "rgba(255,60,60,0.9)";
+        for (const b of (room.blocks || [])) ctx.strokeRect(b.x, b.y, b.w, b.h);
+        const f = feetBox(player.x, player.y);
+        ctx.strokeStyle = "cyan"; ctx.strokeRect(f.x, f.y, f.w, f.h);
+        ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.font = "8px 'Press Start 2P'"; ctx.textAlign = "left";
+        ctx.fillText("DEBUG (C): зелёное=ходить, красное=стены, синее=ноги", 12, 792);
+    }
+
+    // подсказка, если ассеты не нашлись
+    if (assetErrors.length) {
+        ctx.fillStyle = "rgba(0,0,0,0.78)"; ctx.fillRect(36, 36, 728, 74);
+        ctx.fillStyle = "#ffb3c6"; ctx.font = "10px 'Press Start 2P'"; ctx.textAlign = "left";
+        ctx.fillText("Не найдено ассетов: " + assetErrors.length + ". Проверь папку assets/", 52, 68);
+        ctx.fillText("F12 -> Console, либо открой localhost:3000/assets/fern.png", 52, 92);
     }
 }
 
 // ============================================================
-// RESPONSIVE FIT — scale the 800x800 stage to the viewport
+// RESPONSIVE FIT
 // ============================================================
 function fit() {
     const s = Math.min(window.innerWidth / 820, window.innerHeight / 820, 1);
@@ -694,15 +759,8 @@ fit();
 function loop(ts) {
     const dt = Math.min((ts - last) / 1000, 0.05);
     last = ts;
-
     ctx.clearRect(0, 0, 800, 800);
-
-    if (G.started) {
-        update(dt);
-        draw();
-    }
-
+    if (G.started) { update(dt); draw(); }
     requestAnimationFrame(loop);
 }
-
 requestAnimationFrame(loop);

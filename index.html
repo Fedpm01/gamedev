@@ -204,6 +204,25 @@ canvas {
 }
 #retry-btn:hover { transform: scale(1.05); box-shadow: 0 0 18px rgba(255,77,109,0.5); }
 
+/* Audio control */
+#audio-ctrl {
+    position: absolute; top: 12px; left: 12px; z-index: 70;
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(0,0,0,0.7); border: 2px solid rgba(255,255,255,0.25);
+    border-radius: 8px; padding: 6px 10px;
+}
+#mute-btn { background: none; border: none; cursor: pointer; font-size: 14px; line-height: 1; }
+#vol { width: 88px; accent-color: #ff4d6d; cursor: pointer; }
+
+/* Ending restart */
+#restart-btn {
+    font-family: 'Press Start 2P', cursive; font-size: 11px; padding: 12px 24px; margin-top: 26px;
+    border: 3px solid #fff; border-radius: 10px; background: rgba(255,255,255,0.15); color: #fff; cursor: pointer;
+    opacity: 0; transition: opacity 1s 1.6s, transform 0.15s;
+}
+#ending-screen.visible #restart-btn { opacity: 1; }
+#restart-btn:hover { transform: scale(1.06); }
+
 @keyframes blink { 50% { opacity: 0; } }
 @keyframes floatUp {
     0% { transform: translateY(0) scale(1); opacity: 0.9; }
@@ -223,6 +242,11 @@ canvas {
         <div class="hud-item empty" id="hud-honey">— пусто —</div>
     </div>
 
+    <div id="audio-ctrl">
+        <button id="mute-btn" title="Звук">🔊</button>
+        <input id="vol" type="range" min="0" max="100" value="20">
+    </div>
+
     <div id="controls-hint">
         WASD / ↑↓←→ — ходить<br>
         SPACE — говорить / дальше
@@ -237,6 +261,7 @@ canvas {
     <div id="ending-screen">
         <h1 id="ending-title"></h1>
         <p id="ending-body"></p>
+        <button id="restart-btn">↺ Заново</button>
     </div>
 
     <div id="hearts-overlay"></div>
@@ -257,6 +282,8 @@ canvas {
         <button id="title-start">❤ Начать</button>
     </div>
 </div>
+
+<audio id="bg-music" loop preload="auto"></audio>
 
 <script src="game.js"></script>
 </body>
