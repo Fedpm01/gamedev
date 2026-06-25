@@ -2,18 +2,15 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>✨ A Special Quest for Manzura ✨</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>戦争のフリーレン — A Quest for Manzura</title>
+<link rel="icon" type="image/png" href="assets/icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
     background: #0d0d1a;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
     min-height: 100vh;
     font-family: 'Press Start 2P', cursive;
     overflow: hidden;
@@ -24,16 +21,22 @@ body::before {
     content: '';
     position: fixed;
     inset: 0;
-    background: 
+    background:
         radial-gradient(ellipse at 20% 50%, rgba(120,40,200,0.15) 0%, transparent 50%),
         radial-gradient(ellipse at 80% 20%, rgba(255,100,150,0.1) 0%, transparent 50%),
         #0d0d1a;
     z-index: -1;
 }
 
+/* Wrapper is fixed 800x800 and scaled to fit the viewport via JS */
 #game-wrapper {
-    position: relative;
-    display: inline-block;
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%,-50%);
+    transform-origin: center center;
+    width: 800px;
+    height: 800px;
 }
 
 canvas {
@@ -110,61 +113,11 @@ canvas {
     z-index: 30;
     color: white;
 }
-
-#dialogue-speaker {
-    font-size: 9px;
-    color: #c77dff;
-    margin-bottom: 8px;
-}
-
-#dialogue-text {
-    font-size: 13px;
-    line-height: 1.7;
-    color: #fff;
-}
-
+#dialogue-speaker { font-size: 9px; color: #c77dff; margin-bottom: 8px; }
+#dialogue-text { font-size: 13px; line-height: 1.7; color: #fff; min-height: 2.6em; }
 #dialogue-hint {
-    font-size: 8px;
-    color: rgba(255,255,255,0.4);
-    text-align: right;
-    margin-top: 8px;
-    animation: blink 1.2s infinite;
-}
-
-/* Choice buttons */
-#choice-container {
-    display: none;
-    position: absolute;
-    bottom: 140px;
-    left: 50%;
-    transform: translateX(-50%);
-    gap: 24px;
-    z-index: 40;
-    flex-direction: row;
-}
-
-.choice-btn {
-    padding: 14px 28px;
-    font-family: 'Press Start 2P', cursive;
-    font-size: 12px;
-    cursor: pointer;
-    border-radius: 8px;
-    border: 3px solid white;
-    transition: all 0.15s;
-    position: relative;
-}
-
-#yes-btn {
-    background: linear-gradient(135deg, #ff4d6d, #c77dff);
-    color: white;
-    box-shadow: 0 0 20px rgba(255,77,109,0.5);
-}
-#yes-btn:hover { transform: scale(1.08); box-shadow: 0 0 30px rgba(255,77,109,0.8); }
-
-#no-btn {
-    background: rgba(30,30,50,0.9);
-    color: rgba(255,255,255,0.5);
-    border-color: rgba(255,255,255,0.3);
+    font-size: 8px; color: rgba(255,255,255,0.4); text-align: right;
+    margin-top: 8px; animation: blink 1.2s infinite;
 }
 
 /* Ending / success screen */
@@ -182,49 +135,79 @@ canvas {
     padding: 40px;
     transition: background 1s;
 }
-
 #ending-screen.visible {
     background: linear-gradient(135deg, rgba(255,77,109,0.92), rgba(180,50,200,0.92));
 }
-
 #ending-screen h1 {
-    font-size: 22px;
-    color: white;
-    text-shadow: 0 0 20px rgba(255,255,255,0.8);
-    margin-bottom: 20px;
-    line-height: 1.5;
-    opacity: 0;
-    transition: opacity 1s 0.5s;
+    font-size: 22px; color: white; text-shadow: 0 0 20px rgba(255,255,255,0.8);
+    margin-bottom: 20px; line-height: 1.5; opacity: 0; transition: opacity 1s 0.5s;
 }
 #ending-screen p {
-    font-size: 11px;
-    color: rgba(255,255,255,0.85);
-    line-height: 2;
-    opacity: 0;
-    transition: opacity 1s 1.2s;
+    font-size: 11px; color: rgba(255,255,255,0.9); line-height: 2;
+    opacity: 0; transition: opacity 1s 1.2s; white-space: pre-line;
 }
 #ending-screen.visible h1,
 #ending-screen.visible p { opacity: 1; }
 
 /* Floating hearts overlay */
 #hearts-overlay {
-    display: none;
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    z-index: 45;
-    border-radius: 12px;
-    overflow: hidden;
+    display: none; position: absolute; inset: 0; pointer-events: none;
+    z-index: 45; border-radius: 12px; overflow: hidden;
 }
+
+/* ===== TITLE SCREEN (video) ===== */
+#title-screen {
+    position: absolute; inset: 0; z-index: 60; border-radius: 12px; overflow: hidden;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: #0d0d1a;
+}
+#title-video {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.92;
+}
+#title-screen::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(13,13,26,0.30), rgba(13,13,26,0.78));
+}
+#title-logo {
+    position: relative; z-index: 2; width: 72%; max-width: 540px;
+    filter: drop-shadow(0 4px 18px rgba(0,0,0,0.7)); margin-bottom: 34px;
+}
+#title-sub {
+    position: relative; z-index: 2; color: #ffb3c6; font-size: 11px; letter-spacing: 1px;
+    text-shadow: 0 2px 10px #000; margin-bottom: 30px;
+}
+#title-prompt {
+    position: relative; z-index: 2; color: #fff; font-size: 10px;
+    animation: blink 1.2s infinite; text-shadow: 0 2px 8px #000; margin-bottom: 16px; text-align: center; padding: 0 20px;
+}
+#title-start {
+    position: relative; z-index: 2; font-family: 'Press Start 2P', cursive; font-size: 13px;
+    padding: 14px 30px; border: 3px solid #fff; border-radius: 10px;
+    background: linear-gradient(135deg, #ff4d6d, #c77dff); color: #fff; cursor: pointer;
+    box-shadow: 0 0 24px rgba(255,77,109,0.6); transition: transform 0.15s;
+}
+#title-start:hover { transform: scale(1.06); }
+
+/* ===== GAME OVER SCREEN ===== */
+#gameover-screen {
+    display: none; position: absolute; inset: 0; z-index: 55; border-radius: 12px; overflow: hidden;
+    flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(10,8,20,0.93);
+}
+#gameover-img {
+    width: 58%; max-width: 440px; border-radius: 12px; box-shadow: 0 0 30px rgba(0,0,0,0.6); margin-bottom: 22px;
+}
+#gameover-screen h2 { color: #ff9aa8; font-size: 15px; margin-bottom: 18px; text-shadow: 0 0 14px rgba(255,77,109,0.6); }
+#retry-btn {
+    font-family: 'Press Start 2P', cursive; font-size: 11px; padding: 12px 24px;
+    border: 3px solid #fff; border-radius: 10px; background: rgba(40,30,60,0.9); color: #fff; cursor: pointer; transition: transform 0.15s;
+}
+#retry-btn:hover { transform: scale(1.05); box-shadow: 0 0 18px rgba(255,77,109,0.5); }
 
 @keyframes blink { 50% { opacity: 0; } }
 @keyframes floatUp {
     0% { transform: translateY(0) scale(1); opacity: 0.9; }
     100% { transform: translateY(-800px) scale(0.3) rotate(20deg); opacity: 0; }
-}
-@keyframes petalFall {
-    0%   { transform: translateY(-10px) rotate(0deg); opacity: 0.8; }
-    100% { transform: translateY(820px) rotate(360deg); opacity: 0; }
 }
 </style>
 </head>
@@ -251,17 +234,28 @@ canvas {
         <div id="dialogue-hint">▼ SPACE</div>
     </div>
 
-    <div id="choice-container">
-        <button class="choice-btn" id="yes-btn">❤️ ДА!</button>
-        <button class="choice-btn" id="no-btn">🌟 Нет...</button>
-    </div>
-
     <div id="ending-screen">
         <h1 id="ending-title"></h1>
         <p id="ending-body"></p>
     </div>
 
     <div id="hearts-overlay"></div>
+
+    <!-- Game over -->
+    <div id="gameover-screen">
+        <img id="gameover-img" src="assets/gameover.jpg" alt="">
+        <h2>Тебя заметили!</h2>
+        <button id="retry-btn">↺ Ещё раз</button>
+    </div>
+
+    <!-- Title -->
+    <div id="title-screen">
+        <video id="title-video" src="assets/menu.mp4" autoplay loop muted playsinline></video>
+        <img id="title-logo" src="assets/title.png" alt="戦争のフリーレン">
+        <div id="title-sub">✨ A Quest for Manzura ✨</div>
+        <div id="title-prompt">— нажми ПРОБЕЛ или коснись экрана —</div>
+        <button id="title-start">❤ Начать</button>
+    </div>
 </div>
 
 <script src="game.js"></script>

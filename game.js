@@ -1,7 +1,26 @@
 // ============================================================
-// ELVEN DATE ADVENTURE — For Manzura ❤️
-// RPG Invitation Game
+// 戦争のフリーレン — A Quest for Manzura
+// Pixel RPG date invitation (upgraded)
 // ============================================================
+
+// ---- ASSET PATHS — РЕДАКТИРУЙ ЗДЕСЬ, если имена файлов другие ----
+const ASSET_DIR = "assets/";
+const FILES = {
+    player:    "fern.png",
+    npc:       "frieren.png",
+    bear:      "bear.png",
+    honey:     "honey.png",
+    rival:     "rival.png",
+    heartRune: "rune_heart.png",
+    starRune:  "rune_star.png",
+    // карты (имена совпадают с твоими загруженными файлами)
+    map_forest_hub: "pixel_forest.png",
+    map_picnic:     "pixel_picnic.png",
+    map_dancehall:  "map_dancehall.png",
+    map_rival_lair: "pixel_lair.png",
+    map_waterfall:  "pixel_tryst.png",
+    map_oracle:     "pixel_chamber.png",
+};
 
 const canvas = document.getElementById("board");
 const ctx = canvas.getContext("2d");
@@ -12,38 +31,43 @@ canvas.height = 800;
 const dialogueBox     = document.getElementById("dialogue-box");
 const dialogueSpeaker = document.getElementById("dialogue-speaker");
 const dialogueText    = document.getElementById("dialogue-text");
-const choiceContainer = document.getElementById("choice-container");
 const endingScreen    = document.getElementById("ending-screen");
 const heartsOverlay   = document.getElementById("hearts-overlay");
 const roomLabel       = document.getElementById("room-label");
 const hudHoney        = document.getElementById("hud-honey");
+const wrapper         = document.getElementById("game-wrapper");
+const titleScreen     = document.getElementById("title-screen");
+const titleVideo      = document.getElementById("title-video");
+const gameoverScreen  = document.getElementById("gameover-screen");
+
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // ---- LOAD IMAGE HELPER ----
-function img(src) {
+function img(file) {
     const i = new Image();
-    i.src = src;
+    i.src = ASSET_DIR + file;
     return i;
 }
 
 // ---- SPRITES ----
 const SPR = {
-    player:    img("assets/fern.png"),
-    npc:       img("assets/frieren.png"),
-    bear:      img("assets/bear.png"),
-    honey:     img("assets/honey.png"),
-    rival:     img("assets/rival.png"),
-    heartRune: img("assets/rune_heart.png"),
-    starRune:  img("assets/rune_star.png"),
+    player:    img(FILES.player),
+    npc:       img(FILES.npc),
+    bear:      img(FILES.bear),
+    honey:     img(FILES.honey),
+    rival:     img(FILES.rival),
+    heartRune: img(FILES.heartRune),
+    starRune:  img(FILES.starRune),
 };
 
 // ---- MAPS ----
 const MAPS = {
-    forest_hub: img("assets/map_forest.png"),
-    picnic:     img("assets/map_picnic.png"),
-    dancehall:  img("assets/map_dancehall.png"),
-    rival_lair: img("assets/map_rival.png"),
-    waterfall:  img("assets/map_waterfall.png"),
-    oracle:     img("assets/map_oracle.png"),
+    forest_hub: img(FILES.map_forest_hub),
+    picnic:     img(FILES.map_picnic),
+    dancehall:  img(FILES.map_dancehall),
+    rival_lair: img(FILES.map_rival_lair),
+    waterfall:  img(FILES.map_waterfall),
+    oracle:     img(FILES.map_oracle),
 };
 
 // ---- GAME STATE ----
@@ -59,6 +83,8 @@ const G = {
     lockMove: false,
     bearSolved: false,
     orbCollected: false,
+    visited: {},
+    curSpeaker: "",
 };
 
 // ---- INPUT ----
@@ -76,54 +102,48 @@ const rival = { x: 200, y: 300, w: 40, h: 50, dir: 1, speed: 110, minX: 120, max
 const ROOMS = {
 
     forest_hub: {
-        label: "🌲 Forest Hub",
         npc: { x: 380, y: 240 },
         item: { type: "honey", x: 610, y: 520, w: 36, h: 36, active: true },
         exits: [
             { x: 0,   y: 340, w: 50, h: 120, to: "picnic",    label: "← Пикник" },
             { x: 750, y: 340, w: 50, h: 120, to: "dancehall", label: "→ Танцевальный зал" },
         ],
-        onEnter() {
+        onEnter(first) {
+            if (!first) return;
             talk("Frieren", [
                 "Frieren: О, ты пришла... хорошо.",
                 "Frieren: Ладно-ладно, не смотри на меня так — я специально тебя ждала.",
                 "Frieren: Слушай, здесь спрятано несколько подсказок. Найди их все!",
-                "Frieren: Мёд вон там блестит — подбери, он пригодится. Кстати, мишка охраняет кое-что интересное на поляне →",
+                "Frieren: Мёд вон там блестит — подбери, пригодится. А налево ← на поляне мишка кое-что охраняет.",
             ]);
         }
     },
 
     picnic: {
-        label: "🌸 Romantic Picnic Grove",
         bear: { x: 360, y: 310, w: 72, h: 72 },
         clue: { x: 360, y: 290, w: 80, h: 50, active: false, text: "🌸 Подсказка 1: «Место, где пахнет цветами и смеётся ветер...»" },
         exits: [
             { x: 340, y: 750, w: 120, h: 50, to: "forest_hub", label: "↓ Назад" },
         ],
-        onEnter() {
-            if (!G.bearSolved) {
+        onEnter(first) {
+            if (!G.bearSolved && first) {
                 talk("Frieren", [
                     "Frieren: Ага, видишь этого пушистика?",
                     "Frieren: Он охраняет первую подсказку к свиданию.",
                     "Frieren: Медведи, знаешь ли, без взятки не работают. Попробуй мёд!",
-                ]);
-            } else {
-                talk("Frieren", [
-                    "Frieren: Медведь уже спит, красота!",
-                    "Frieren: Забирай подсказку у корзины.",
                 ]);
             }
         }
     },
 
     dancehall: {
-        label: "💃 Starlit Dance Hall",
         clue: { x: 370, y: 200, w: 60, h: 60, active: true, text: "✨ Подсказка 2: «Там, где музыка — это тайный язык двоих...»" },
         exits: [
             { x: 340, y: 750, w: 120, h: 50, to: "forest_hub",  label: "↓ Назад" },
             { x: 340, y: 0,   w: 120, h: 50, to: "rival_lair",  label: "↑ Дальше" },
         ],
-        onEnter() {
+        onEnter(first) {
+            if (!first) return;
             talk("Frieren", [
                 "Frieren: Вау, да ты умеешь танцевать?",
                 "Frieren: Ну, неважно — здесь спрятана вторая подсказка!",
@@ -134,12 +154,12 @@ const ROOMS = {
     },
 
     rival_lair: {
-        label: "⚔️ Rival's Lair",
         exits: [
             { x: 750, y: 340, w: 50, h: 120, to: "waterfall", label: "→ К водопаду" },
             { x: 340, y: 750, w: 120, h: 50, to: "dancehall", label: "↓ Назад" },
         ],
-        onEnter() {
+        onEnter(first) {
+            if (!first) return;
             talk("Frieren", [
                 "Frieren: Тсс! Это логово соперницы.",
                 "Frieren: Она обожает мешать романтике. Классика жанра.",
@@ -149,13 +169,13 @@ const ROOMS = {
     },
 
     waterfall: {
-        label: "💧 Waterfall Tryst",
         orb: { x: 370, y: 280, w: 50, h: 50, active: true },
         exits: [
-            { x: 0,   y: 340, w: 50, h: 120, to: "oracle",    label: "← К Оракулу" },
+            { x: 0,   y: 340, w: 50, h: 120, to: "oracle",     label: "← К Оракулу" },
             { x: 340, y: 750, w: 120, h: 50, to: "rival_lair", label: "↓ Назад" },
         ],
-        onEnter() {
+        onEnter(first) {
+            if (!first) return;
             talk("Frieren", [
                 "Frieren: Ах, водопад... романтика, да?",
                 "Frieren: Здесь светится Orb of Truth — последняя подсказка перед финалом!",
@@ -165,7 +185,6 @@ const ROOMS = {
     },
 
     oracle: {
-        label: "🔮 Oracle Chamber",
         npc: { x: 360, y: 230 },
         runes: [
             { type: "accept",  x: 220, y: 400, w: 100, h: 100 },
@@ -178,7 +197,7 @@ const ROOMS = {
                 "Frieren: Все подсказки вели сюда.",
                 "Frieren: Я хочу пригласить тебя на свидание. Настоящее.",
                 "Frieren: Ну? Сердце — это «да». Звезда — это «я подумаю ещё лет сто».",
-            ], () => { G.choiceActive = true; showChoice(); });
+            ], () => { G.choiceActive = true; });
         }
     },
 };
@@ -194,30 +213,50 @@ const ROOM_LABELS = {
 };
 
 // ============================================================
-// DIALOGUE SYSTEM
+// DIALOGUE SYSTEM (with typewriter)
 // ============================================================
+let typeTimer = null, typing = false, fullLine = "";
+
+function showLine(text) {
+    let t = text;
+    if (G.curSpeaker && t.startsWith(G.curSpeaker + ":")) t = t.slice(G.curSpeaker.length + 1).trim();
+    fullLine = t;
+    clearInterval(typeTimer);
+    if (reduceMotion) { dialogueText.textContent = t; typing = false; return; }
+    dialogueText.textContent = "";
+    typing = true;
+    let i = 0;
+    typeTimer = setInterval(() => {
+        dialogueText.textContent = t.slice(0, ++i);
+        if (i >= t.length) { clearInterval(typeTimer); typing = false; }
+    }, 26);
+}
+
 function talk(speaker, lines, onEnd) {
     G.talking = true;
     G.lockMove = true;
     G.dialogueIndex = 0;
     G.currentLines = lines;
     G.onDialogueEnd = onEnd || null;
+    G.curSpeaker = speaker;
 
     dialogueSpeaker.textContent = speaker;
-    dialogueText.textContent = lines[0];
     dialogueBox.style.display = "block";
+    showLine(lines[0]);
 }
 
 function advanceDialogue() {
     if (!G.talking) return;
+
+    // First press finishes the current line instantly
+    if (typing) { clearInterval(typeTimer); dialogueText.textContent = fullLine; typing = false; return; }
+
     G.dialogueIndex++;
 
     if (G.dialogueIndex >= G.currentLines.length) {
-        // end
         G.talking = false;
         dialogueBox.style.display = "none";
         G.lockMove = false;
-
         if (G.onDialogueEnd) {
             const cb = G.onDialogueEnd;
             G.onDialogueEnd = null;
@@ -226,29 +265,8 @@ function advanceDialogue() {
         return;
     }
 
-    dialogueText.textContent = G.currentLines[G.dialogueIndex];
+    showLine(G.currentLines[G.dialogueIndex]);
 }
-
-// ============================================================
-// CHOICES
-// ============================================================
-function showChoice() {
-    choiceContainer.style.display = "flex";
-}
-
-document.getElementById("yes-btn").addEventListener("click", () => {
-    choiceContainer.style.display = "none";
-    triggerEnding("yes");
-});
-
-const noBtn = document.getElementById("no-btn");
-noBtn.addEventListener("mouseenter", () => {
-    const maxX = 680, maxY = 580;
-    noBtn.style.position = "absolute";
-    noBtn.style.left = Math.floor(Math.random() * maxX) + "px";
-    noBtn.style.top  = Math.floor(Math.random() * maxY) + "px";
-    noBtn.textContent = ["🐻 Не поймаешь!", "🌀 Куда-куда...", "✨ Хи-хи!"][Math.floor(Math.random()*3)];
-});
 
 // ============================================================
 // ENDING
@@ -262,15 +280,13 @@ function triggerEnding(type) {
 
     setTimeout(() => {
         endingScreen.style.display = "flex";
-        requestAnimationFrame(() => {
-            endingScreen.classList.add("visible");
-        });
+        requestAnimationFrame(() => endingScreen.classList.add("visible"));
 
         document.getElementById("ending-title").textContent = "❤️ Манзура, ты согласилась!";
-        document.getElementById("ending-body").innerHTML =
+        document.getElementById("ending-body").textContent =
             "Ты прошла все испытания и нашла все подсказки.\n\n" +
-            "Твой герой ждёт тебя на настоящем свидании.\n\n" +
-            "Скоро ты узнаешь — где и когда. 🌸";
+            "А теперь — самое настоящее свидание.\n\n" +
+            "Где и когда — узнаешь совсем скоро. 🌸";
     }, 1200);
 }
 
@@ -294,6 +310,25 @@ function spawnHearts() {
 }
 
 // ============================================================
+// GAME OVER (caught by rival)
+// ============================================================
+function showGameOver() {
+    G.lockMove = true;
+    G.talking = false;
+    dialogueBox.style.display = "none";
+    gameoverScreen.style.display = "flex";
+}
+
+function retryRival() {
+    gameoverScreen.style.display = "none";
+    rival.x = 200; rival.y = 300; rival.dir = 1;
+    player.x = 380; player.y = 600;
+    G.lockMove = false;
+}
+
+document.getElementById("retry-btn").addEventListener("click", retryRival);
+
+// ============================================================
 // LOAD ROOM
 // ============================================================
 function loadRoom(name) {
@@ -302,7 +337,6 @@ function loadRoom(name) {
     G.lockMove = false;
     G.talking = false;
     dialogueBox.style.display = "none";
-    choiceContainer.style.display = "none";
 
     player.x = 380;
     player.y = 520;
@@ -310,7 +344,9 @@ function loadRoom(name) {
     roomLabel.textContent = ROOM_LABELS[name] || name;
 
     const room = ROOMS[name];
-    if (room && room.onEnter) room.onEnter();
+    const first = !G.visited[name];
+    G.visited[name] = true;
+    if (room && room.onEnter) room.onEnter(first);
 }
 
 // ============================================================
@@ -324,21 +360,12 @@ function hit(a, b) {
 }
 
 // ============================================================
-// SPACE KEY — interaction
+// ACTION (SPACE / touch button) — interaction
 // ============================================================
-document.addEventListener("keydown", e => {
-    if (e.code !== "Space") return;
+function pressAction() {
+    if (!G.started) { startGame(); return; }
 
-    if (!G.started) {
-        G.started = true;
-        loadRoom("forest_hub");
-        return;
-    }
-
-    if (G.talking) {
-        advanceDialogue();
-        return;
-    }
+    if (G.talking) { advanceDialogue(); return; }
 
     const room = ROOMS[G.room];
 
@@ -414,20 +441,37 @@ document.addEventListener("keydown", e => {
             talk("Frieren", [
                 "Frieren: ✨ Orb of Truth подобран!",
                 "Frieren: Последняя подсказка: «Там, где время замирает — и ты улыбаешься».",
-                "Frieren: Теперь ступай в Оракул — налево →",
+                "Frieren: Теперь ступай в Оракул — налево ←",
             ]);
             return;
         }
     }
 
-    // NPC in oracle — re-trigger if needed
+    // NPC in oracle — re-trigger proposal if needed
     if (G.room === "oracle" && !G.choiceActive) {
         const npc = room.npc;
         if (npc && hit(player, { x: npc.x, y: npc.y, w: 40, h: 50 })) {
             room.onEnter();
         }
     }
+}
+
+document.addEventListener("keydown", e => {
+    if (e.code === "Space") { e.preventDefault(); pressAction(); }
 });
+
+// ============================================================
+// START
+// ============================================================
+function startGame() {
+    if (G.started) return;
+    G.started = true;
+    titleScreen.style.display = "none";
+    try { if (titleVideo) titleVideo.pause(); } catch (e) {}
+    loadRoom("forest_hub");
+}
+document.getElementById("title-start").addEventListener("click", startGame);
+titleScreen.addEventListener("click", startGame);
 
 // ============================================================
 // UPDATE LOOP
@@ -466,25 +510,29 @@ function update(dt) {
         if (rival.x > rival.maxX) { rival.x = rival.maxX; rival.dir = -1; }
 
         if (rivalSpots()) {
-            talk("Frieren", [
-                "Frieren: Ой-ой! Тебя заметили!",
-                "Frieren: Давай ещё раз — прокрадись мимо красного конуса!",
-            ]);
-            rival.x = 200; rival.y = 300; rival.dir = 1;
-            player.x = 380; player.y = 600;
+            showGameOver();
+            return;
         }
     }
 
-    // ORACLE RUNE WALK
+    // ORACLE RUNES
     if (G.room === "oracle" && G.choiceActive) {
-        for (const rune of room.runes) {
-            if (hit(player, rune)) {
-                if (rune.type === "accept") {
-                    choiceContainer.style.display = "none";
-                    triggerEnding("yes");
-                } else {
-                    // runaway button — do nothing (button runs away on hover)
-                }
+        const heart = room.runes.find(r => r.type === "accept");
+        const star  = room.runes.find(r => r.type === "decline");
+
+        if (heart && hit(player, heart)) {
+            triggerEnding("yes");
+            return;
+        }
+        // The "star / no" rune playfully runs away when you get close
+        if (star) {
+            const d = Math.hypot(
+                (player.x + player.w / 2) - (star.x + star.w / 2),
+                (player.y + player.h / 2) - (star.y + star.h / 2)
+            );
+            if (d < 120) {
+                star.x = 90 + Math.random() * 520;
+                star.y = 300 + Math.random() * 270;
             }
         }
     }
@@ -502,11 +550,15 @@ function rivalSpots() {
 // ============================================================
 // DRAW
 // ============================================================
-let pulseT = 0;
-
 function draw() {
-    // Map background
-    ctx.drawImage(MAPS[G.room], 0, 0, 800, 800);
+    // Map background (guard against not-yet-loaded images)
+    const map = MAPS[G.room];
+    if (map && map.complete && map.naturalWidth) {
+        ctx.drawImage(map, 0, 0, 800, 800);
+    } else {
+        ctx.fillStyle = "#16121f";
+        ctx.fillRect(0, 0, 800, 800);
+    }
 
     const room = ROOMS[G.room];
 
@@ -549,7 +601,6 @@ function draw() {
 
     // Rival (rival_lair)
     if (G.room === "rival_lair") {
-        // Vision cone
         ctx.fillStyle = "rgba(255,40,40,0.22)";
         ctx.beginPath();
         if (rival.dir === 1) {
@@ -586,7 +637,6 @@ function draw() {
     // NPC — forest_hub and oracle
     if (room.npc) {
         ctx.drawImage(SPR.npc, room.npc.x, room.npc.y, 40, 50);
-        // "!" exclamation if near
         const dist = Math.hypot(player.x - room.npc.x, player.y - room.npc.y);
         if (dist < 80 && !G.talking) {
             const bounce = Math.sin(Date.now() * 0.006) * 3;
@@ -629,57 +679,14 @@ function draw() {
 }
 
 // ============================================================
-// START SCREEN
+// RESPONSIVE FIT — scale the 800x800 stage to the viewport
 // ============================================================
-function drawStartScreen() {
-    // Dark gradient
-    const grad = ctx.createLinearGradient(0, 0, 0, 800);
-    grad.addColorStop(0, "#0d0d2b");
-    grad.addColorStop(1, "#1a0a2e");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 800, 800);
-
-    // Stars
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
-    for (let i = 0; i < 80; i++) {
-        const sx = (Math.sin(i * 137.5) * 0.5 + 0.5) * 800;
-        const sy = (Math.cos(i * 97.3)  * 0.5 + 0.5) * 800;
-        const ss = Math.random() < 0.1 ? 2 : 1;
-        ctx.fillRect(sx, sy, ss, ss);
-    }
-
-    // Title glow
-    ctx.shadowBlur = 30;
-    ctx.shadowColor = "#ff4d6d";
-    ctx.fillStyle = "#ffb3c6";
-    ctx.font = "22px 'Press Start 2P'";
-    ctx.textAlign = "center";
-    ctx.fillText("✨ A Quest for Manzura ✨", 400, 310);
-    ctx.shadowBlur = 0;
-
-    ctx.fillStyle = "rgba(200,200,255,0.85)";
-    ctx.font = "11px 'Press Start 2P'";
-    ctx.fillText("Elven Date Adventure", 400, 355);
-
-    // Blinking prompt
-    const blink = Math.floor(Date.now() / 600) % 2 === 0;
-    if (blink) {
-        ctx.fillStyle = "rgba(255,255,255,0.9)";
-        ctx.font = "10px 'Press Start 2P'";
-        ctx.fillText("— Нажми SPACE чтобы начать —", 400, 440);
-    }
-
-    // Decorative hearts
-    const t = Date.now() * 0.001;
-    const hearts = ["❤️","💖","🌸","✨"];
-    for (let i = 0; i < hearts.length; i++) {
-        const angle = t + (i / hearts.length) * Math.PI * 2;
-        const hx = 400 + Math.cos(angle) * 120;
-        const hy = 380 + Math.sin(angle) * 40;
-        ctx.font = "20px serif";
-        ctx.fillText(hearts[i], hx, hy);
-    }
+function fit() {
+    const s = Math.min(window.innerWidth / 820, window.innerHeight / 820, 1);
+    wrapper.style.transform = `translate(-50%,-50%) scale(${s})`;
 }
+window.addEventListener("resize", fit);
+fit();
 
 // ============================================================
 // MAIN LOOP
@@ -690,9 +697,7 @@ function loop(ts) {
 
     ctx.clearRect(0, 0, 800, 800);
 
-    if (!G.started) {
-        drawStartScreen();
-    } else {
+    if (G.started) {
         update(dt);
         draw();
     }
