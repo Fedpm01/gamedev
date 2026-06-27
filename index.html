@@ -211,7 +211,7 @@ canvas {
     background: rgba(0,0,0,0.7); border: 2px solid rgba(255,255,255,0.25);
     border-radius: 8px; padding: 6px 10px;
 }
-#mute-btn { background: none; border: none; cursor: pointer; font-size: 14px; line-height: 1; }
+#mute-btn, #voice-btn { background: none; border: none; cursor: pointer; font-size: 14px; line-height: 1; }
 #vol { width: 88px; accent-color: #ff4d6d; cursor: pointer; }
 
 /* Ending restart */
@@ -245,6 +245,7 @@ canvas {
     <div id="audio-ctrl">
         <button id="mute-btn" title="Звук">🔊</button>
         <input id="vol" type="range" min="0" max="100" value="20">
+        <button id="voice-btn" title="Голос Фрирен">🗣️</button>
     </div>
 
     <div id="controls-hint">

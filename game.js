@@ -91,8 +91,9 @@ document.addEventListener("keyup",   e => { keys[e.code] = false; });
 // ---- PLAYER (Ферн) — размер как есть ----
 const player = { x: 380, y: 520, w: 40, h: 50, speed: 260 };
 
-// ---- RIVAL (чуть меньше) ----
-const rival = { x: 200, y: 300, w: 48, h: 58, dir: 1, speed: 110, minX: 120, maxX: 620 };
+// ---- RIVAL (соперница) ----
+const CONE_LEN = 300, CONE_H = 95;
+const rival = { x: 200, y: 450, w: 62, h: 74, dir: 1, speed: 130, minX: 140, maxX: 600, pause: 0, pauseMax: 0.7 };
 
 // ============================================================
 // ROOMS — npc/item размеры + blocks (препятствия) + onEnter
@@ -167,43 +168,38 @@ const ROOMS = {
     },
 
     rival_lair: {
-        blocks: [
-            { x: 330, y: 120, w: 160, h: 80  },   // руина сверху
-            { x: 230, y: 190, w: 70,  h: 130 },   // колонна слева
-            { x: 500, y: 190, w: 70,  h: 130 },   // колонна справа
-        ],
+        // коридор: ходить можно поперёк, мимо патрулирующей соперницы
+        walk: [ { x: 70, y: 300, w: 660, h: 300 } ],
+        spawn: { x: 110, y: 450 },
         exits: [
-            { x: 750, y: 340, w: 50, h: 120, to: "waterfall", label: "→ К водопаду" },
-            { x: 340, y: 750, w: 120, h: 50, to: "dancehall", label: "↓ Назад" },
+            { x: 670, y: 440, w: 130, h: 130, to: "waterfall", label: "→ К водопаду" },
         ],
         onEnter(first) {
             if (!first) return;
             talk("Frieren", [
                 "Frieren: Тсс! Это логово соперницы.",
-                "Frieren: Она обожает мешать романтике. Классика жанра.",
-                "Frieren: Обойди её — красный конус это её зрение. Проскользни к выходу →",
+                "Frieren: Она ходит туда-сюда, а красный конус — это её взгляд.",
+                "Frieren: Прокрадись СВЕРХУ, вне её зрения, и проскользни к выходу справа, когда она отвернётся →",
             ]);
         }
     },
 
     waterfall: {
-        orb: { x: 370, y: 470, w: 50, h: 50, active: true },
-        // ходить можно только по камню/тропе/левой полянке — НЕ по воде
+        orb: { x: 380, y: 500, w: 50, h: 50, active: true },
+        // ходить можно ТОЛЬКО по каменной площадке и тропе вниз — НЕ по воде
         walk: [
-            { x: 195, y: 380, w: 385, h: 235 },   // центральная каменная площадка
-            { x: 300, y: 560, w: 200, h: 240 },   // тропа вниз к выходу
-            { x: 20,  y: 300, w: 215, h: 170 },   // левая полянка (стол) -> выход к Оракулу
+            { x: 235, y: 420, w: 330, h: 210 },   // центральная каменная площадка
+            { x: 330, y: 610, w: 150, h: 190 },   // тропа вниз к Оракулу
         ],
         exits: [
-            { x: 0,   y: 340, w: 50, h: 120, to: "oracle",     label: "← К Оракулу" },
-            { x: 340, y: 750, w: 120, h: 50, to: "rival_lair", label: "↓ Назад" },
+            { x: 330, y: 760, w: 150, h: 40, to: "oracle", label: "↓ К Оракулу" },
         ],
         onEnter(first) {
             if (!first) return;
             talk("Frieren", [
                 "Frieren: Ах, водопад... романтика, да?",
                 "Frieren: Здесь светится Orb of Truth — последняя подсказка перед финалом!",
-                "Frieren: Подойди к нему и подбери.",
+                "Frieren: Подойди и подбери его, потом ступай вниз ↓ к Оракулу.",
             ]);
         }
     },
@@ -244,8 +240,10 @@ const ROOM_LABELS = {
 // AUDIO (музыка-файл + процедурные звуки + громкость)
 // ============================================================
 let actx = null, master = null, muted = false;
+let musicDuck = 1.0;   // 1.0 на титульнике, ~0.3 в игре — чтобы был слышен голос
 
 function curVol() { return muted ? 0 : (parseInt(volEl.value, 10) / 100); }
+function musicVol() { return curVol() * musicDuck; }
 
 function initAudio() {
     if (actx) return;
@@ -276,7 +274,7 @@ function sfxPickup() { beep(660, 0.08, "square", 0, 0.18); beep(990, 0.10, "squa
 function sfxWin()    { [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.20, "triangle", i * 0.12, 0.22)); }
 
 function applyVolume() {
-    if (bgMusic) bgMusic.volume = curVol();
+    if (bgMusic) bgMusic.volume = musicVol();
     if (master) master.gain.value = curVol();
 }
 // какая музыка в какой комнате (имена = ТВОИ файлы в assets/)
@@ -293,7 +291,7 @@ function playRoomMusic(room) {
     if (track === currentTrack) return;          // та же музыка — не перезапускаем
     currentTrack = track;
     bgMusic.src = ASSET_DIR + encodeURIComponent(track);
-    bgMusic.volume = curVol();
+    bgMusic.volume = musicVol();
     bgMusic.play().catch(() => {/* нет файла — не страшно */});
 }
 volEl.addEventListener("input", applyVolume);
@@ -301,6 +299,7 @@ muteBtn.addEventListener("click", () => {
     muted = !muted;
     muteBtn.textContent = muted ? "🔇" : "🔊";
     if (bgMusic) bgMusic.muted = muted;
+    if (muted) stopVoice();
     applyVolume();
 });
 
@@ -308,7 +307,7 @@ muteBtn.addEventListener("click", () => {
 function ensureMusic() {
     if (!bgMusic) return;
     if (!bgMusic.src) { currentTrack = MUSIC.default; bgMusic.src = ASSET_DIR + encodeURIComponent(MUSIC.default); }
-    bgMusic.volume = curVol();
+    bgMusic.volume = musicVol();
     bgMusic.play().catch(() => {/* браузер ждёт первого касания/клика */});
 }
 // первое действие пользователя (даже движок ползунка громкости) запускает музыку
@@ -323,6 +322,33 @@ window.addEventListener("keydown", firstInteract);
 window.addEventListener("touchstart", firstInteract);
 ensureMusic();   // попытка автозапуска (если браузер разрешит)
 
+// ---- ГОЛОС ФРИРЕН ----
+// Хочешь НАСТОЯЩИЙ голос Фрирен из аниме? Накидай короткие звуковые клипы её реплик
+// в assets/ (например, её «хм», «фуэ?», вздохи, 1-2 сек) и впиши имена файлов сюда —
+// игра будет проигрывать случайный клип на каждую реплику = её настоящий голос:
+const VOICE_CLIPS = []; // напр.: ["fri1.mp3", "fri2.mp3", "fri3.mp3"]
+let voiceOn = true;
+let voiceAudio = null;
+function playVoiceClip() {
+    if (!VOICE_CLIPS.length) return false;
+    try {
+        if (!voiceAudio) voiceAudio = new Audio();
+        voiceAudio.src = ASSET_DIR + encodeURIComponent(VOICE_CLIPS[Math.floor(Math.random() * VOICE_CLIPS.length)]);
+        voiceAudio.volume = Math.min(1, curVol() * 1.7);
+        voiceAudio.play().catch(() => {});
+        return true;
+    } catch (e) { return false; }
+}
+// если клипов нет — мягкое «бормотание» под печать текста (стиль Undertale), приятнее робота
+function voiceBlip() { beep(300 + Math.random() * 120, 0.04, "square", 0, 0.12); }
+function stopVoice() { try { if (voiceAudio) { voiceAudio.pause(); voiceAudio.currentTime = 0; } } catch (e) {} }
+const voiceBtn = document.getElementById("voice-btn");
+voiceBtn.addEventListener("click", () => {
+    voiceOn = !voiceOn;
+    voiceBtn.textContent = voiceOn ? "🗣️" : "🤫";
+    if (!voiceOn) stopVoice();
+});
+
 // ============================================================
 // DIALOGUE SYSTEM (typewriter)
 // ============================================================
@@ -333,13 +359,16 @@ function showLine(text) {
     if (G.curSpeaker && t.startsWith(G.curSpeaker + ":")) t = t.slice(G.curSpeaker.length + 1).trim();
     fullLine = t;
     clearInterval(typeTimer);
-    sfxBlip();
+    let chatter = false;
+    if (voiceOn && !muted) { if (!playVoiceClip()) chatter = true; }
     if (reduceMotion) { dialogueText.textContent = t; typing = false; return; }
     dialogueText.textContent = "";
     typing = true;
     let i = 0;
     typeTimer = setInterval(() => {
+        const ch = t[i];
         dialogueText.textContent = t.slice(0, ++i);
+        if (chatter && ch && ch !== " " && i % 2 === 0) voiceBlip();
         if (i >= t.length) { clearInterval(typeTimer); typing = false; }
     }, 26);
 }
@@ -357,7 +386,7 @@ function advanceDialogue() {
     if (typing) { clearInterval(typeTimer); dialogueText.textContent = fullLine; typing = false; return; }
     G.dialogueIndex++;
     if (G.dialogueIndex >= G.currentLines.length) {
-        G.talking = false; dialogueBox.style.display = "none"; G.lockMove = false;
+        G.talking = false; dialogueBox.style.display = "none"; G.lockMove = false; stopVoice();
         if (G.onDialogueEnd) { const cb = G.onDialogueEnd; G.onDialogueEnd = null; cb(); }
         return;
     }
@@ -414,8 +443,9 @@ function showGameOver() {
 }
 function retryRival() {
     gameoverScreen.style.display = "none";
-    rival.x = 200; rival.y = 300; rival.dir = 1;
-    player.x = 380; player.y = 600;
+    rival.x = 200; rival.dir = 1; rival.pause = 0;
+    const sp = ROOMS.rival_lair.spawn;
+    player.x = sp.x; player.y = sp.y;
     G.lockMove = false;
 }
 document.getElementById("retry-btn").addEventListener("click", retryRival);
@@ -426,7 +456,8 @@ document.getElementById("retry-btn").addEventListener("click", retryRival);
 function loadRoom(name) {
     G.room = name; G.choiceActive = false; G.lockMove = false; G.talking = false;
     dialogueBox.style.display = "none";
-    player.x = 380; player.y = 520;
+    const sp = (ROOMS[name] && ROOMS[name].spawn) || { x: 380, y: 520 };
+    player.x = sp.x; player.y = sp.y;
     roomLabel.textContent = ROOM_LABELS[name] || name;
     const room = ROOMS[name];
     const first = !G.visited[name];
@@ -554,6 +585,8 @@ function startGame() {
     titleScreen.style.display = "none";
     try { if (titleVideo) titleVideo.pause(); } catch (e) {}
     initAudio();
+    musicDuck = 0.3;   // приглушить фон — теперь слышно голос Фрирен
+    applyVolume();
     loadRoom("forest_hub");
 }
 document.getElementById("title-start").addEventListener("click", startGame);
@@ -589,9 +622,13 @@ function update(dt) {
 
     // патруль соперницы
     if (G.room === "rival_lair") {
-        rival.x += rival.dir * rival.speed * dt;
-        if (rival.x < rival.minX) { rival.x = rival.minX; rival.dir = 1; }
-        if (rival.x > rival.maxX) { rival.x = rival.maxX; rival.dir = -1; }
+        if (rival.pause > 0) {
+            rival.pause -= dt;
+        } else {
+            rival.x += rival.dir * rival.speed * dt;
+            if (rival.x <= rival.minX) { rival.x = rival.minX; rival.dir = 1;  rival.pause = rival.pauseMax; }
+            if (rival.x >= rival.maxX) { rival.x = rival.maxX; rival.dir = -1; rival.pause = rival.pauseMax; }
+        }
         if (rivalSpots()) { showGameOver(); return; }
     }
 
@@ -611,11 +648,10 @@ function update(dt) {
 }
 
 function rivalSpots() {
-    const coneLen = 220, coneH = 110;
     if (rival.dir === 1  && player.x < rival.x) return false;
     if (rival.dir === -1 && player.x > rival.x) return false;
-    if (Math.abs(player.x - rival.x) > coneLen) return false;
-    if (Math.abs(player.y - rival.y) > coneH) return false;
+    if (Math.abs(player.x - rival.x) > CONE_LEN) return false;
+    if (Math.abs(player.y - rival.y) > CONE_H) return false;
     return true;
 }
 
@@ -662,15 +698,16 @@ function draw() {
 
     // соперница (rival_lair)
     if (G.room === "rival_lair") {
+        const cyR = rival.y + rival.h / 2;
         ctx.fillStyle = "rgba(255,40,40,0.22)"; ctx.beginPath();
         if (rival.dir === 1) {
-            ctx.moveTo(rival.x + rival.w, rival.y + 25);
-            ctx.lineTo(rival.x + rival.w + 220, rival.y - 110);
-            ctx.lineTo(rival.x + rival.w + 220, rival.y + 110 + 25);
+            ctx.moveTo(rival.x + rival.w, cyR);
+            ctx.lineTo(rival.x + rival.w + CONE_LEN, cyR - CONE_H);
+            ctx.lineTo(rival.x + rival.w + CONE_LEN, cyR + CONE_H);
         } else {
-            ctx.moveTo(rival.x, rival.y + 25);
-            ctx.lineTo(rival.x - 220, rival.y - 110);
-            ctx.lineTo(rival.x - 220, rival.y + 110 + 25);
+            ctx.moveTo(rival.x, cyR);
+            ctx.lineTo(rival.x - CONE_LEN, cyR - CONE_H);
+            ctx.lineTo(rival.x - CONE_LEN, cyR + CONE_H);
         }
         ctx.closePath(); ctx.fill();
         drawImg(SPR.rival, rival.x, rival.y, rival.w, rival.h);
