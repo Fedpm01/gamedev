@@ -41,6 +41,7 @@ const gameoverScreen  = document.getElementById("gameover-screen");
 const bgMusic         = document.getElementById("bg-music");
 const volEl           = document.getElementById("vol");
 const muteBtn         = document.getElementById("mute-btn");
+const hudClues        = document.getElementById("hud-clues");
 
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -79,6 +80,8 @@ const G = {
     started: false, room: "forest_hub", inventory: [], talking: false,
     dialogueIndex: 0, currentLines: [], onDialogueEnd: null, choiceActive: false,
     lockMove: false, bearSolved: false, orbCollected: false, visited: {}, curSpeaker: "",
+    clue1: false, clue2: false, oracleStarted: false,
+    quiz: { active: false, index: 0, armed: false }, quizPads: [],
 };
 
 let debug = false;   // нажми C в игре, чтобы видеть блоки-препятствия
@@ -118,6 +121,7 @@ const ROOMS = {
             talk("Frieren", [
                 "Frieren: О, ты пришла... хорошо.",
                 "Frieren: Ладно-ладно, не смотри на меня так — я специально тебя ждала.",
+                "Frieren: Знаешь, я повидала тысячу лет и кучу людей. Но мало кого ждала вот так.",
                 "Frieren: Слушай, здесь спрятано несколько подсказок. Найди их все!",
                 "Frieren: Мёд вон там блестит — подбери, пригодится. А налево ← на поляне мишка кое-что охраняет.",
             ]);
@@ -198,6 +202,7 @@ const ROOMS = {
             if (!first) return;
             talk("Frieren", [
                 "Frieren: Ах, водопад... романтика, да?",
+                "Frieren: Для меня века летят как дни. Но рядом с правильным человеком даже миг — целая вечность.",
                 "Frieren: Здесь светится Orb of Truth — последняя подсказка перед финалом!",
                 "Frieren: Подойди и подбери его, потом ступай вниз ↓ к Оракулу.",
             ]);
@@ -206,6 +211,7 @@ const ROOMS = {
 
     oracle: {
         npc: { x: 360, y: 230 },
+        spawn: { x: 380, y: 660 },
         runes: [
             { type: "accept",  x: 220, y: 400, w: 84, h: 84 },
             { type: "decline", x: 480, y: 400, w: 84, h: 84 },
@@ -217,12 +223,13 @@ const ROOMS = {
         ],
         exits: [],
         onEnter() {
+            if (G.oracleStarted) return;
+            G.oracleStarted = true;
             talk("Frieren", [
                 "Frieren: Манзура... ты прошла весь путь.",
-                "Frieren: Все подсказки вели сюда.",
-                "Frieren: Я хочу пригласить тебя на свидание. Настоящее.",
-                "Frieren: Ну? Сердце — это «да». Звезда — это «я подумаю ещё лет сто».",
-            ], () => { G.choiceActive = true; });
+                "Frieren: Все подсказки вели сюда. Но Оракул должен убедиться в твоём сердце.",
+                "Frieren: Ответь на пару вопросов — просто встань на нужную площадку.",
+            ], () => { startQuiz(); });
         }
     },
 };
@@ -235,6 +242,35 @@ const ROOM_LABELS = {
     waterfall:  "💧 Waterfall Tryst",
     oracle:     "🔮 Oracle Chamber",
 };
+
+// ============================================================
+// ВИКТОРИНА ОРАКУЛА — вопросы Фрирен (ответ = встать на площадку)
+//   Лёгкая и прощающая: неверный ответ просто даёт смешную реплику и повтор.
+// ============================================================
+const ORACLE_QUIZ = [
+    {
+        q: "Кто собрал отряд героев против Короля Демонов?",
+        pads: [
+            { label: "Химмель",   correct: true,  reply: ["Frieren: ...Да. Храбрый Химмель.", "Frieren: Он бы сейчас улыбнулся."] },
+            { label: "Сама Фрирен", correct: false, reply: ["Frieren: Лестно. Но нет — попробуй ещё."] },
+            { label: "Не помню",  correct: false, reply: ["Frieren: Ты же фанатка. Вспоминай. ✨"] },
+        ],
+    },
+    {
+        q: "А где Манзура обычно с камерой в руках?",
+        pads: [
+            { label: "На тимбилдинге", correct: true,  reply: ["Frieren: Ха! Точно — снимает влоги для всей команды.", "Frieren: Кто-то явно это приметил... 😏"] },
+            { label: "Дома",          correct: false, reply: ["Frieren: Почти. Но там, где её видят все. 😏"] },
+            { label: "Нигде",         correct: false, reply: ["Frieren: Да ладно. Мы оба знаем про тимбилдинги."] },
+        ],
+    },
+];
+const QUIZ_PAD_POS = [
+    { x: 130, y: 480, w: 95, h: 95 },
+    { x: 350, y: 480, w: 95, h: 95 },
+    { x: 575, y: 480, w: 95, h: 95 },
+];
+const QUIZ_PAD_COLORS = ["255,150,200", "150,200,255", "255,210,120"];
 
 // ============================================================
 // AUDIO (музыка-файл + процедурные звуки + громкость)
@@ -272,6 +308,7 @@ function beep(freq, dur, type, when, gain) {
 function sfxBlip()   { beep(520, 0.05, "square", 0, 0.08); }
 function sfxPickup() { beep(660, 0.08, "square", 0, 0.18); beep(990, 0.10, "square", 0.07, 0.16); }
 function sfxWin()    { [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.20, "triangle", i * 0.12, 0.22)); }
+function sfxStep()   { beep(90 + Math.random() * 24, 0.035, "triangle", 0, 0.04); }
 
 function applyVolume() {
     if (bgMusic) bgMusic.volume = musicVol();
@@ -463,6 +500,7 @@ function loadRoom(name) {
     const first = !G.visited[name];
     G.visited[name] = true;
     if (room && room.onEnter) room.onEnter(first);
+    initParticles(name);
     playRoomMusic(name);
 }
 
@@ -496,6 +534,13 @@ function canStand(x, y) {
 // ============================================================
 // ACTION (SPACE / клик) — взаимодействие
 // ============================================================
+function updateClues() {
+    const got = [G.clue1 && "🌸", G.clue2 && "✨", G.orbCollected && "🔮"].filter(Boolean);
+    const n = got.length;
+    hudClues.textContent = "🔮 Подсказки: " + n + "/3" + (n ? "  " + got.join(" ") : "");
+    hudClues.className = n ? "hud-item" : "hud-item empty";
+}
+
 function pressAction() {
     if (!G.started) { startGame(); return; }
     if (G.talking) { advanceDialogue(); return; }
@@ -537,7 +582,7 @@ function pressAction() {
     }
 
     if (G.room === "picnic" && room.clue && room.clue.active && hit(player, room.clue)) {
-        room.clue.active = false; sfxPickup();
+        room.clue.active = false; G.clue1 = true; updateClues(); sfxPickup();
         talk("Frieren", [
             "Frieren: " + room.clue.text,
             "Frieren: Красивая подсказка, правда? 😏",
@@ -547,7 +592,7 @@ function pressAction() {
     }
 
     if (G.room === "dancehall" && room.clue && room.clue.active && hit(player, room.clue)) {
-        room.clue.active = false; sfxPickup();
+        room.clue.active = false; G.clue2 = true; updateClues(); sfxPickup();
         talk("Frieren", [
             "Frieren: " + room.clue.text,
             "Frieren: Именно! Теперь иди дальше — к водопаду через логово соперницы.",
@@ -556,7 +601,7 @@ function pressAction() {
     }
 
     if (G.room === "waterfall" && room.orb && room.orb.active && hit(player, room.orb)) {
-        room.orb.active = false; G.orbCollected = true; sfxPickup();
+        room.orb.active = false; G.orbCollected = true; updateClues(); sfxPickup();
         talk("Frieren", [
             "Frieren: ✨ Orb of Truth подобран!",
             "Frieren: Последняя подсказка: «Там, где время замирает — и ты улыбаешься».",
@@ -588,14 +633,162 @@ function startGame() {
     musicDuck = 0.3;   // приглушить фон — теперь слышно голос Фрирен
     applyVolume();
     loadRoom("forest_hub");
+    fade = 1; fadeDir = -1;   // плавное появление из чёрного
 }
 document.getElementById("title-start").addEventListener("click", startGame);
 titleScreen.addEventListener("click", startGame);
 
 // ============================================================
+// PARTICLES (атмосфера комнат)
+// ============================================================
+const PARTICLE_THEMES = {
+    forest_hub: { color: "180,255,150", count: 22, kind: "fly"   },  // светлячки
+    picnic:     { color: "255,200,230", count: 22, kind: "petal" },  // лепестки
+    dancehall:  { color: "200,200,255", count: 26, kind: "spark" },  // блёстки
+    rival_lair: { color: "255,140,90",  count: 18, kind: "ember" },  // угли
+    waterfall:  { color: "150,220,255", count: 26, kind: "mist"  },  // брызги
+    oracle:     { color: "210,170,255", count: 26, kind: "spark" },  // магия
+};
+let particles = [];
+let particleTheme = null;
+function makeParticle(th) {
+    const vy = (th.kind === "petal" || th.kind === "mist") ? (14 + Math.random() * 26) : -(8 + Math.random() * 22);
+    return {
+        x: Math.random() * 800, y: Math.random() * 800,
+        r: 1.4 + Math.random() * 2.6,
+        vx: (Math.random() - 0.5) * 22, vy,
+        a: 0.2 + Math.random() * 0.45,
+        phase: Math.random() * Math.PI * 2,
+    };
+}
+function initParticles(room) {
+    particles = [];
+    particleTheme = PARTICLE_THEMES[room] || null;
+    if (!particleTheme) return;
+    for (let i = 0; i < particleTheme.count; i++) particles.push(makeParticle(particleTheme));
+}
+function updateParticles(dt) {
+    if (!particleTheme) return;
+    for (const p of particles) {
+        p.phase += dt * 2;
+        p.x += (p.vx + Math.sin(p.phase) * 10) * dt;
+        p.y += p.vy * dt;
+        if (p.y < -12) p.y = 812;
+        if (p.y > 812) p.y = -12;
+        if (p.x < -12) p.x = 812;
+        if (p.x > 812) p.x = -12;
+    }
+}
+function drawParticles() {
+    if (!particleTheme) return;
+    for (const p of particles) {
+        const tw = particleTheme.kind === "fly" ? (0.35 + 0.65 * (0.5 + 0.5 * Math.sin(p.phase * 3))) : 1;
+        ctx.fillStyle = "rgba(" + particleTheme.color + "," + (p.a * tw).toFixed(2) + ")";
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+    }
+}
+
+// ============================================================
+// FADE / ПЛАВНЫЕ ПЕРЕХОДЫ МЕЖДУ КОМНАТАМИ
+// ============================================================
+let fade = 0, fadeDir = 0, pendingRoom = null;
+function startTransition(to) {
+    if (pendingRoom) return;
+    pendingRoom = to;
+    fadeDir = 1;            // затемняемся
+    G.lockMove = true;
+}
+function tickFade(dt) {
+    if (fadeDir === 1) {
+        fade = Math.min(1, fade + dt * 3.5);
+        if (fade >= 1 && pendingRoom) {
+            const to = pendingRoom; pendingRoom = null;
+            loadRoom(to);
+            fadeDir = -1;      // проявляемся
+        }
+    } else if (fadeDir === -1) {
+        fade = Math.max(0, fade - dt * 3.5);
+        if (fade <= 0) fadeDir = 0;
+    }
+}
+
+// ============================================================
+// ВИКТОРИНА ОРАКУЛА — логика
+// ============================================================
+function startQuiz() {
+    G.quiz.active = true; G.quiz.index = 0;
+    setupQuizQuestion();
+}
+function setupQuizQuestion() {
+    const q = ORACLE_QUIZ[G.quiz.index];
+    G.quizPads = q.pads.map((p, i) => Object.assign({}, QUIZ_PAD_POS[i], p));
+    G.quiz.armed = false;   // взведётся, когда игрок сойдёт со всех площадок
+    G.lockMove = false;
+}
+function answerQuiz(pad) {
+    G.quiz.armed = false;
+    if (pad.correct) {
+        talk("Frieren", pad.reply, () => {
+            G.quiz.index++;
+            if (G.quiz.index >= ORACLE_QUIZ.length) finishQuiz();
+            else setupQuizQuestion();
+        });
+    } else {
+        talk("Frieren", pad.reply, () => setupQuizQuestion());
+    }
+}
+function finishQuiz() {
+    G.quiz.active = false; G.quizPads = [];
+    talk("Frieren", [
+        "Frieren: Хех. Ты прошла даже мои вопросы.",
+        "Frieren: Тогда — самое главное.",
+        "Frieren: Манзура, я хочу пригласить тебя на настоящее свидание.",
+        "Frieren: Сердце — это «да». Звезда — «я подумаю ещё лет сто».",
+    ], () => { G.choiceActive = true; });
+}
+// перенос текста для canvas (по словам, выравнивание по центру)
+function wrapText(text, cx, y, maxW, lh) {
+    const words = String(text).split(" ");
+    let line = "", lines = [];
+    for (const w of words) {
+        const test = line ? line + " " + w : w;
+        if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+        else line = test;
+    }
+    if (line) lines.push(line);
+    for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], cx, y + i * lh);
+}
+function drawQuiz() {
+    for (let i = 0; i < (G.quizPads || []).length; i++) {
+        const p = G.quizPads[i];
+        const col = QUIZ_PAD_COLORS[i % QUIZ_PAD_COLORS.length];
+        const glow = 0.45 + Math.sin(Date.now() * 0.005 + i) * 0.25;
+        const cx = p.x + p.w / 2, cy = p.y + p.h / 2;
+        ctx.shadowBlur = 24; ctx.shadowColor = "rgba(" + col + "," + glow.toFixed(2) + ")";
+        ctx.fillStyle = "rgba(" + col + "," + (glow * 0.45).toFixed(2) + ")";
+        ctx.beginPath(); ctx.ellipse(cx, cy, p.w / 2, p.h / 2 * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = "rgba(" + col + ",0.9)"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(cx, cy, p.w / 2, p.h / 2 * 0.62, 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = "#fff"; ctx.font = "8px 'Press Start 2P'"; ctx.textAlign = "center";
+        wrapText(p.label, cx, p.y - 6, 130, 11);
+    }
+    if (!G.talking) {
+        const q = ORACLE_QUIZ[G.quiz.index];
+        ctx.fillStyle = "rgba(20,15,30,0.82)"; ctx.fillRect(70, 92, 660, 74);
+        ctx.strokeStyle = "rgba(255,180,255,0.7)"; ctx.lineWidth = 2; ctx.strokeRect(70, 92, 660, 74);
+        ctx.fillStyle = "#ffd9f2"; ctx.font = "10px 'Press Start 2P'"; ctx.textAlign = "center";
+        wrapText(q.q, 400, 120, 610, 15);
+        ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.font = "7px 'Press Start 2P'";
+        ctx.fillText("встань на ответ", 400, 156);
+    }
+}
+
+// ============================================================
 // UPDATE LOOP
 // ============================================================
 let last = 0;
+let stepTimer = 0;
 
 function update(dt) {
     if (G.lockMove) return;
@@ -608,16 +801,23 @@ function update(dt) {
     if (dx && dy) { dx *= Math.SQRT1_2; dy *= Math.SQRT1_2; }
 
     // движение по осям отдельно + проверка препятствий (скольжение вдоль стен)
+    const prevX = player.x, prevY = player.y;
     let nx = Math.max(0, Math.min(760, player.x + dx * player.speed * dt));
     let ny = Math.max(0, Math.min(750, player.y + dy * player.speed * dt));
     if (canStand(nx, player.y)) player.x = nx;
     if (canStand(player.x, ny)) player.y = ny;
 
+    // шаги
+    if (player.x !== prevX || player.y !== prevY) {
+        stepTimer -= dt;
+        if (stepTimer <= 0) { sfxStep(); stepTimer = 0.28; }
+    } else stepTimer = 0;
+
     const room = ROOMS[G.room];
 
     // выходы
     for (const ex of room.exits || []) {
-        if (hit(player, ex)) { loadRoom(ex.to); return; }
+        if (hit(player, ex)) { startTransition(ex.to); return; }
     }
 
     // патруль соперницы
@@ -632,17 +832,25 @@ function update(dt) {
         if (rivalSpots()) { showGameOver(); return; }
     }
 
-    // руны оракула
-    if (G.room === "oracle" && G.choiceActive) {
-        const heart = room.runes.find(r => r.type === "accept");
-        const star  = room.runes.find(r => r.type === "decline");
-        if (heart && hit(player, heart)) { triggerEnding("yes"); return; }
-        if (star) {
-            const d = Math.hypot(
-                (player.x + player.w / 2) - (star.x + star.w / 2),
-                (player.y + player.h / 2) - (star.y + star.h / 2)
-            );
-            if (d < 120) { star.x = 90 + Math.random() * 520; star.y = 300 + Math.random() * 270; }
+    // оракул: сначала викторина, потом финальный выбор
+    if (G.room === "oracle") {
+        if (G.quiz.active) {
+            const pads = G.quizPads || [];
+            if (!G.quiz.armed && !G.talking && !pads.some(p => hit(player, p))) G.quiz.armed = true;
+            if (G.quiz.armed && !G.talking) {
+                for (const p of pads) { if (hit(player, p)) { answerQuiz(p); break; } }
+            }
+        } else if (G.choiceActive) {
+            const heart = room.runes.find(r => r.type === "accept");
+            const star  = room.runes.find(r => r.type === "decline");
+            if (heart && hit(player, heart)) { triggerEnding("yes"); return; }
+            if (star) {
+                const d = Math.hypot(
+                    (player.x + player.w / 2) - (star.x + star.w / 2),
+                    (player.y + player.h / 2) - (star.y + star.h / 2)
+                );
+                if (d < 120) { star.x = 90 + Math.random() * 520; star.y = 300 + Math.random() * 270; }
+            }
         }
     }
 }
@@ -666,6 +874,8 @@ function draw() {
     const map = MAPS[G.room];
     if (map && map.complete && map.naturalWidth) ctx.drawImage(map, 0, 0, 800, 800);
     else { ctx.fillStyle = "#16121f"; ctx.fillRect(0, 0, 800, 800); }
+
+    drawParticles();
 
     const room = ROOMS[G.room];
 
@@ -733,6 +943,9 @@ function draw() {
         }
     }
 
+    // викторина оракула
+    if (G.room === "oracle" && G.quiz.active) drawQuiz();
+
     // руны оракула
     if (G.room === "oracle" && G.choiceActive) {
         for (const rune of room.runes) {
@@ -778,6 +991,9 @@ function draw() {
         ctx.fillText("Не найдено ассетов: " + assetErrors.length + ". Проверь папку assets/", 52, 68);
         ctx.fillText("F12 -> Console, либо открой localhost:3000/assets/fern.png", 52, 92);
     }
+
+    // затемнение перехода между комнатами
+    if (fade > 0) { ctx.fillStyle = "rgba(0,0,0," + fade.toFixed(3) + ")"; ctx.fillRect(0, 0, 800, 800); }
 }
 
 // ============================================================
@@ -797,7 +1013,7 @@ function loop(ts) {
     const dt = Math.min((ts - last) / 1000, 0.05);
     last = ts;
     ctx.clearRect(0, 0, 800, 800);
-    if (G.started) { update(dt); draw(); }
+    if (G.started) { update(dt); updateParticles(dt); tickFade(dt); draw(); }
     requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
